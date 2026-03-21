@@ -855,7 +855,7 @@ function ExpedienteCliente({ client, onBack }) {
           file_name = file.name;
         }
       }
-      const nombre = files.length > 1 ? (file ? file.name : docForm.nombre) : docForm.nombre;
+      const nombre = docForm.nombre; // siempre usar el nombre/descripción que escribió el usuario
       await supabase.from("cliente_documentos").insert([{ cliente_id:client.id, tipo:"Documento", nombre, fecha_emision:docForm.fecha_emision||null, fecha_vencimiento:docForm.fecha_vencimiento||null, notas:docForm.notas, file_url, file_name }]);
     }
     setUploading(false);
@@ -1018,9 +1018,9 @@ function ExpedienteCliente({ client, onBack }) {
                         {doc.file_name?.endsWith(".cer")?"🔑":doc.file_name?.endsWith(".key")?"🗝️":doc.file_name?.endsWith(".pdf")?"📕":doc.file_name?.endsWith(".txt")?"📝":doc.file_name?.endsWith(".req")?"📋":"📄"}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.nombre}</div>
-                        {doc.file_name && doc.file_name !== doc.nombre && (
-                          <div style={{ color:C.muted, fontSize:12, marginTop:2 }}>📎 {doc.file_name}</div>
+                        <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.file_name || doc.nombre}</div>
+                        {doc.nombre && (
+                          <div style={{ color:C.muted, fontSize:12, marginTop:3, fontWeight:500 }}>📌 {doc.nombre}</div>
                         )}
                         {doc.notas && <div style={{ color:C.muted, fontSize:11, marginTop:2, fontStyle:"italic" }}>{doc.notas}</div>}
                       </div>
