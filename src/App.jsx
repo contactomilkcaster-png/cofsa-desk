@@ -252,6 +252,7 @@ const NAV = [
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
+  { id:"asistente", icon:"🤖", label:"Asistente IA" },
 ];
 
 function Sidebar({ active, onNav, user, onLogout, notifCount }) {
@@ -1277,6 +1278,171 @@ function ClientesModule({ onNavigate }) {
   );
 }
 
+// ── ASISTENTE IA ──────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `Eres el Asistente Contable de COFSA (Consultoría Contable Fiscal y Administrativa), un despacho contable mexicano. Tu nombre es "Asistente COFSA".
+
+Eres un experto en:
+- Contabilidad general y fiscal en México
+- SAT: declaraciones, CFDI, RFC, regímenes fiscales, ISR, IVA, IEPS
+- IMSS: cuotas patronales, SUA, afiliaciones, incapacidades, INFONAVIT
+- Nómina: cálculo de salarios, IMSS, ISR, PTU, liquidaciones
+- Personas Físicas y Morales: obligaciones fiscales, deducciones, constancias
+- Declaraciones: mensuales, anuales, informativas, DIOT, complementarias
+- Impuestos locales y federales de México
+- Trámites SAT: e.firma, FIEL, contraseña, buzón tributario
+- Leyes: CFF, LISR, LIVA, LIMSS, LFT
+- Auditorías, revisiones y opiniones de cumplimiento
+
+Responde siempre en español, de forma clara, práctica y profesional. Cuando sea relevante, cita artículos de ley o fundamentos legales. Si el usuario menciona un cliente o situación específica, ayúdale a resolverla paso a paso. Si no sabes algo con certeza, dilo claramente y recomienda consultar la fuente oficial (SAT, IMSS, DOF).`;
+
+function AsistenteModule({ user }) {
+  const [messages, setMessages] = useState([
+    { role:"assistant", content:"¡Hola! Soy el **Asistente COFSA**, tu experto en contabilidad, fiscal, SAT, IMSS e impuestos de México. ¿En qué te puedo ayudar hoy?" }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef();
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role:"user", content:input.trim() };
+    setMessages(prev=>[...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          system: SYSTEM_PROMPT,
+          messages: [...messages, userMsg].filter(m=>m.role==="user"||m.role==="assistant").map(m=>({role:m.role, content:m.content})),
+        })
+      });
+      const data = await response.json();
+      const text = data.content?.map(b=>b.text||"").join("") || "No pude obtener una respuesta. Intenta de nuevo.";
+      setMessages(prev=>[...prev, { role:"assistant", content:text }]);
+    } catch(e) {
+      setMessages(prev=>[...prev, { role:"assistant", content:"Error de conexión. Verifica tu internet e intenta de nuevo." }]);
+    }
+    setLoading(false);
+  };
+
+  const formatText = (text) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^- (.+)/gm, '• $1')
+      .replace(/\n/g, '<br/>');
+  };
+
+  const SUGERENCIAS = [
+    "¿Cuándo vence la declaración mensual de ISR?",
+    "¿Cómo calculo las cuotas del IMSS?",
+    "¿Qué documentos necesito para sacar la e.firma?",
+    "¿Cuál es la diferencia entre régimen simplificado y general?",
+    "¿Cómo presento una declaración complementaria?",
+    "¿Qué es la DIOT y cuándo se presenta?",
+  ];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:C.bg }}>
+      <style>{ANIM}</style>
+
+      {/* Header */}
+      <div style={{ padding:"18px 28px", background:C.surface, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:14 }}>
+        <div style={{ width:44, height:44, borderRadius:12, background:C.navy, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:`0 4px 12px ${C.navy}44` }}>🤖</div>
+        <div>
+          <div style={{ color:C.navy, fontWeight:800, fontSize:16 }}>Asistente COFSA</div>
+          <div style={{ color:C.green, fontSize:11, display:"flex", alignItems:"center", gap:4, marginTop:1 }}>
+            <span style={{ width:6, height:6, borderRadius:"50%", background:C.green, display:"inline-block" }} />
+            Especialista en fiscal, SAT, IMSS e impuestos México · Powered by Claude
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:"auto", padding:"24px 28px" }}>
+
+        {/* Sugerencias iniciales */}
+        {messages.length === 1 && (
+          <div style={{ marginBottom:24, animation:"fadeUp 0.4s ease" }}>
+            <div style={{ color:C.muted, fontSize:12, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 }}>Preguntas frecuentes</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:8 }}>
+              {SUGERENCIAS.map((s,i)=>(
+                <button key={i} onClick={()=>{ setInput(s); }} style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"10px 14px", color:C.text, fontSize:13, cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"all 0.15s" }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.navy;e.currentTarget.style.background=C.navyDim;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surface;}}>
+                  💡 {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m,i)=>{
+          const isUser = m.role==="user";
+          return (
+            <div key={i} style={{ display:"flex", gap:12, marginBottom:20, flexDirection:isUser?"row-reverse":"row", animation:"fadeUp 0.25s ease" }}>
+              <div style={{ width:36, height:36, borderRadius:"50%", background:isUser?C.navy:C.navyDim, border:`2px solid ${isUser?C.navy:C.navyLight}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+                {isUser?"👤":"🤖"}
+              </div>
+              <div style={{ maxWidth:"75%" }}>
+                <div style={{ fontSize:11, color:C.muted, fontWeight:600, marginBottom:4, textAlign:isUser?"right":"left" }}>
+                  {isUser ? (user.email?.split("@")[0] || "Tú") : "Asistente COFSA"}
+                </div>
+                <div style={{
+                  background:isUser?C.navy:C.surface,
+                  border:isUser?"none":`1px solid ${C.border}`,
+                  borderRadius:isUser?"14px 14px 4px 14px":"14px 14px 14px 4px",
+                  padding:"12px 16px",
+                  color:isUser?C.white:C.text,
+                  fontSize:14, lineHeight:1.7,
+                  boxShadow:"0 2px 8px rgba(0,0,0,0.06)",
+                }} dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
+              </div>
+            </div>
+          );
+        })}
+
+        {loading && (
+          <div style={{ display:"flex", gap:12, marginBottom:20, animation:"fadeUp 0.2s ease" }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+            <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:"14px 14px 14px 4px", padding:"14px 18px", display:"flex", gap:6, alignItems:"center" }}>
+              {[0,1,2].map(i=><div key={i} style={{ width:7, height:7, borderRadius:"50%", background:C.navy, opacity:0.4, animation:"pulse 1.2s ease infinite", animationDelay:`${i*0.2}s` }} />)}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ padding:"16px 28px", background:C.surface, borderTop:`1px solid ${C.border}` }}>
+        <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
+          <textarea
+            value={input} onChange={e=>setInput(e.target.value)} rows={2}
+            onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }}
+            placeholder="Escribe tu consulta fiscal, contable o de impuestos… (Enter para enviar, Shift+Enter para nueva línea)"
+            style={{ flex:1, background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:12, padding:"12px 16px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"none", lineHeight:1.5, boxSizing:"border-box" }}
+            onFocus={e=>e.target.style.borderColor=C.navy}
+            onBlur={e=>e.target.style.borderColor=C.border}
+          />
+          <Btn onClick={send} disabled={!input.trim()||loading} style={{ padding:"12px 20px", flexShrink:0, height:"fit-content" }}>
+            {loading ? "..." : "Enviar ↑"}
+          </Btn>
+        </div>
+        <div style={{ color:C.muted, fontSize:11, marginTop:8, textAlign:"center" }}>
+          Asistente especializado en legislación fiscal y contable de México 🇲🇽
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── APP ROOT ───────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
@@ -1332,13 +1498,14 @@ export default function App() {
     tareas: <TareasModule user={user} initialClient={clientFilter} />,
     chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} />,
+    asistente: <AsistenteModule user={user} />,
   };
 
   return (
     <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Montserrat', sans-serif" }}>
       <style>{ANIM}</style>
       <Sidebar active={activeModule} onNav={handleNav} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} />
-      <main style={{ flex:1, overflowY:activeModule==="chat"?"hidden":"auto" }}>
+      <main style={{ flex:1, overflowY:(activeModule==="chat"||activeModule==="asistente")?"hidden":"auto" }}>
         {modules[activeModule]}
       </main>
     </div>
