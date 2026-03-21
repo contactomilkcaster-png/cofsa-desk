@@ -794,7 +794,7 @@ function ExpedienteCliente({ client, onBack }) {
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [showPass, setShowPass] = useState({});
   const [otrosAccesos, setOtrosAccesos] = useState([]);
-  const [docForm, setDocForm] = useState({ tipo:"Constancia de Situación Fiscal", nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", file:null });
+  const [docForm, setDocForm] = useState({ nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", files:[] });
   const [form, setForm] = useState({ rfc:"", razon_social:"", regimen_fiscal:"", sat_usuario:"", sat_password:"", imss_usuario:"", imss_password:"", infonavit_usuario:"", infonavit_password:"" });
 
   const TIPOS_DOC = ["Constancia de Situación Fiscal","Opinión de Cumplimiento SAT","Comprobante de pago IMSS","e.firma (.cer)","e.firma (.key)","Acta Constitutiva","Poder Notarial","Otro"];
@@ -841,21 +841,26 @@ function ExpedienteCliente({ client, onBack }) {
   const uploadDoc = async () => {
     if (!docForm.nombre.trim()) return;
     setUploading(true);
-    let file_url = null, file_name = null;
-    if (docForm.file) {
-      const ext = docForm.file.name.split(".").pop();
-      const path = `${client.id}/${Date.now()}.${ext}`;
-      const { data: up } = await supabase.storage.from("documentos").upload(path, docForm.file);
-      if (up) {
-        const { data: pub } = supabase.storage.from("documentos").getPublicUrl(path);
-        file_url = pub.publicUrl;
-        file_name = docForm.file.name;
+    const files = docForm.files && docForm.files.length > 0 ? docForm.files : [null];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      let file_url = null, file_name = null;
+      if (file) {
+        const ext = file.name.split(".").pop();
+        const path = `${client.id}/${Date.now()}_${i}.${ext}`;
+        const { data: up } = await supabase.storage.from("documentos").upload(path, file);
+        if (up) {
+          const { data: pub } = supabase.storage.from("documentos").getPublicUrl(path);
+          file_url = pub.publicUrl;
+          file_name = file.name;
+        }
       }
+      const nombre = files.length > 1 ? (file ? file.name : docForm.nombre) : docForm.nombre;
+      await supabase.from("cliente_documentos").insert([{ cliente_id:client.id, tipo:"Documento", nombre, fecha_emision:docForm.fecha_emision||null, fecha_vencimiento:docForm.fecha_vencimiento||null, notas:docForm.notas, file_url, file_name }]);
     }
-    await supabase.from("cliente_documentos").insert([{ cliente_id:client.id, tipo:docForm.tipo, nombre:docForm.nombre, fecha_emision:docForm.fecha_emision||null, fecha_vencimiento:docForm.fecha_vencimiento||null, notas:docForm.notas, file_url, file_name }]);
     setUploading(false);
     setShowAddDoc(false);
-    setDocForm({ tipo:"Constancia de Situación Fiscal", nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", file:null });
+    setDocForm({ nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", files:[] });
     load();
   };
 
@@ -1041,19 +1046,30 @@ function ExpedienteCliente({ client, onBack }) {
 
           {showAddDoc && (
             <Modal title="Subir documento" onClose={()=>setShowAddDoc(false)} width={540}>
-              <FieldSelect label="Tipo de documento" value={docForm.tipo} onChange={e=>setDocForm(p=>({...p,tipo:e.target.value}))}>
-                {TIPOS_DOC.map(t=><option key={t}>{t}</option>)}
-              </FieldSelect>
-              <Input label="Nombre / descripción *" value={docForm.nombre} onChange={e=>setDocForm(p=>({...p,nombre:e.target.value}))} placeholder="Ej: Constancia Q1 2025" />
+              <Input label="Nombre / descripción *" value={docForm.nombre} onChange={e=>setDocForm(p=>({...p,nombre:e.target.value}))} placeholder="Ej: Constancia Q1 2025, e.firma, Acta Constitutiva…" />
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <Input label="Fecha de emisión" type="date" value={docForm.fecha_emision} onChange={e=>setDocForm(p=>({...p,fecha_emision:e.target.value}))} />
                 <Input label="Fecha de vencimiento" type="date" value={docForm.fecha_vencimiento} onChange={e=>setDocForm(p=>({...p,fecha_vencimiento:e.target.value}))} />
               </div>
               <div style={{ marginBottom:16 }}>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Archivo (PDF, .cer, .key, etc.)</div>
-                <input type="file" onChange={e=>setDocForm(p=>({...p,file:e.target.files[0]}))}
-                  style={{ width:"100%", background:C.panel, border:`1.5px dashed ${C.border}`, borderRadius:9, padding:"12px 14px", color:C.muted, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box" }} />
-                {docForm.file && <div style={{ color:C.green, fontSize:12, marginTop:6 }}>✓ {docForm.file.name}</div>}
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Archivos (PDF, .cer, .key, imágenes, carpetas…)</div>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <label style={{ flex:1, background:C.panel, border:`1.5px dashed ${C.border}`, borderRadius:9, padding:"12px 14px", color:C.muted, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box", textAlign:"center", display:"block" }}>
+                    📄 Seleccionar archivos
+                    <input type="file" multiple onChange={e=>setDocForm(p=>({...p,files:Array.from(e.target.files)}))} style={{ display:"none" }} />
+                  </label>
+                  <label style={{ flex:1, background:C.navyDim, border:`1.5px dashed ${C.navy}44`, borderRadius:9, padding:"12px 14px", color:C.navy, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box", textAlign:"center", display:"block" }}>
+                    📁 Seleccionar carpeta
+                    <input type="file" webkitdirectory="true" multiple onChange={e=>setDocForm(p=>({...p,files:Array.from(e.target.files)}))} style={{ display:"none" }} />
+                  </label>
+                </div>
+                {docForm.files && docForm.files.length > 0 && (
+                  <div style={{ background:C.greenBg, border:`1px solid ${C.green}33`, borderRadius:8, padding:"8px 12px" }}>
+                    <div style={{ color:C.green, fontSize:12, fontWeight:600, marginBottom:4 }}>✓ {docForm.files.length} archivo{docForm.files.length>1?"s":""} seleccionado{docForm.files.length>1?"s":""}</div>
+                    {docForm.files.slice(0,5).map((f,i)=><div key={i} style={{ color:C.muted, fontSize:11 }}>• {f.name}</div>)}
+                    {docForm.files.length>5 && <div style={{ color:C.muted, fontSize:11 }}>...y {docForm.files.length-5} más</div>}
+                  </div>
+                )}
               </div>
               <Input label="Notas (opcional)" value={docForm.notas} onChange={e=>setDocForm(p=>({...p,notas:e.target.value}))} placeholder="Observaciones…" />
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
