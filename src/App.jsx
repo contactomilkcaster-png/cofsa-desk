@@ -1313,12 +1313,14 @@ function AsistenteModule({ user }) {
     setLoading(true);
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://gkihfrtayaknarigdzwk.supabase.co/functions/v1/chat-ia", {
         method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${SUPABASE_KEY}`,
+          "apikey": SUPABASE_KEY,
+        },
         body: JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
           system: SYSTEM_PROMPT,
           messages: [...messages, userMsg].filter(m=>m.role==="user"||m.role==="assistant").map(m=>({role:m.role, content:m.content})),
         })
