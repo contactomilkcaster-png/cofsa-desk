@@ -1019,7 +1019,7 @@ function ExpedienteCliente({ client, onBack }) {
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.file_name || doc.nombre}</div>
-                        {doc.nombre && (
+                        {doc.file_name && doc.nombre && (
                           <div style={{ color:C.muted, fontSize:12, marginTop:3, fontWeight:500 }}>📌 {doc.nombre}</div>
                         )}
                         {doc.notas && <div style={{ color:C.muted, fontSize:11, marginTop:2, fontStyle:"italic" }}>{doc.notas}</div>}
