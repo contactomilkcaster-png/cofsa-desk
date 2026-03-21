@@ -698,9 +698,15 @@ function ChatModule({ user }) {
   useEffect(()=>{ load(); },[channel]);
 
   useEffect(()=>{
-    const ch = supabase.channel(`chat-${channel}`).on("postgres_changes",{event:"INSERT",schema:"public",table:"mensajes",filter:`channel=eq.${channel}`},payload=>{
-      setMessages(prev=>[...prev, payload.new]);
-    }).subscribe();
+    const ch = supabase.channel(`chat-${channel}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"mensajes",filter:`channel=eq.${channel}`}, payload=>{
+        // Solo agrega si no es nuestro propio mensaje (ya lo agregamos localmente)
+        setMessages(prev=>{
+          const exists = prev.find(m=>m.id===payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new];
+        });
+      }).subscribe();
     return ()=>supabase.removeChannel(ch);
   },[channel]);
 
@@ -708,8 +714,25 @@ function ChatModule({ user }) {
 
   const send = async () => {
     if (!text.trim()) return;
-    const t = text.trim(); setText("");
-    await supabase.from("mensajes").insert([{ from_user:user.id, from_email:user.email, channel, is_dm:false, text:t }]);
+    const t = text.trim();
+    setText("");
+    // Agregar mensaje localmente de inmediato para respuesta instantánea
+    const tempMsg = {
+      id: `temp-${Date.now()}`,
+      from_user: user.id,
+      from_email: user.email,
+      channel,
+      is_dm: false,
+      text: t,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev=>[...prev, tempMsg]);
+    // Insertar en Supabase (el evento realtime lo reemplazará con el ID real)
+    const { data } = await supabase.from("mensajes").insert([{ from_user:user.id, from_email:user.email, channel, is_dm:false, text:t }]).select().single();
+    if (data) {
+      // Reemplazar el mensaje temporal con el real
+      setMessages(prev=>prev.map(m=>m.id===tempMsg.id ? data : m));
+    }
   };
 
   const colorFor = (id) => {
