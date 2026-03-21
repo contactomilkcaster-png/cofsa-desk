@@ -1015,11 +1015,13 @@ function ExpedienteCliente({ client, onBack }) {
                   <Card key={doc.id} style={{ padding:18 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                       <div style={{ width:44, height:44, borderRadius:10, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
-                        {doc.tipo.includes(".cer")||doc.tipo.includes(".key")?"🔑":doc.tipo.includes("IMSS")?"🏥":doc.tipo.includes("Acta")?"📜":"📄"}
+                        {doc.file_name?.endsWith(".cer")?"🔑":doc.file_name?.endsWith(".key")?"🗝️":doc.file_name?.endsWith(".pdf")?"📕":doc.file_name?.endsWith(".txt")?"📝":doc.file_name?.endsWith(".req")?"📋":"📄"}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.nombre}</div>
-                        <div style={{ color:C.muted, fontSize:12, marginTop:2 }}>{doc.tipo}</div>
+                        {doc.file_name && doc.file_name !== doc.nombre && (
+                          <div style={{ color:C.muted, fontSize:12, marginTop:2 }}>📎 {doc.file_name}</div>
+                        )}
                         {doc.notas && <div style={{ color:C.muted, fontSize:11, marginTop:2, fontStyle:"italic" }}>{doc.notas}</div>}
                       </div>
                       <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8, flexShrink:0 }}>
@@ -1028,7 +1030,12 @@ function ExpedienteCliente({ client, onBack }) {
                         {doc.fecha_emision && <div style={{ color:C.muted, fontSize:11 }}>Emitido: {doc.fecha_emision}</div>}
                       </div>
                       <div style={{ display:"flex", gap:8, flexShrink:0 }}>
-                        {doc.file_url && <a href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:8, padding:"8px 12px", fontSize:12, fontWeight:600, textDecoration:"none", cursor:"pointer" }}>⬇️ Descargar</a>}
+                        {doc.file_url && (
+                          <a href={doc.file_url} download={doc.file_name || doc.nombre}
+                            style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:8, padding:"8px 12px", fontSize:12, fontWeight:600, textDecoration:"none", cursor:"pointer", display:"inline-block" }}>
+                            ⬇️ Descargar
+                          </a>
+                        )}
                         <button onClick={()=>delDoc(doc.id, doc.file_url)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"8px 12px", fontFamily:"inherit", fontSize:12 }}>🗑️</button>
                       </div>
                     </div>
