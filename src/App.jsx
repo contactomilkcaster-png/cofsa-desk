@@ -1583,18 +1583,19 @@ function NominaModule() {
       doc.setTextColor(27,42,74);
       if (nombreTrabajador || nombreEmpresa) {
         doc.setFillColor(238, 242, 251);
-        doc.roundedRect(M, y, TW || W - M*2, 14, 2, 2, "F");
+        doc.roundedRect(M, y, TW, 12, 2, 2, "F");
         doc.setFont("helvetica","bold");
         doc.setFontSize(9);
         doc.setTextColor(27,42,74);
-        if (nombreTrabajador) doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 6);
-        if (nombreEmpresa) doc.text(`Empresa: ${nombreEmpresa}`, M + 4, y + 11);
         if (nombreTrabajador && nombreEmpresa) {
-          // Mostrar en dos columnas
-          doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 9);
-          doc.text(`Empresa: ${nombreEmpresa}`, M + (W - M*2)/2 + 4, y + 9);
+          doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 8);
+          doc.text(`Empresa: ${nombreEmpresa}`, M + TW/2 + 4, y + 8);
+        } else if (nombreTrabajador) {
+          doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 8);
+        } else {
+          doc.text(`Empresa: ${nombreEmpresa}`, M + 4, y + 8);
         }
-        y += 18;
+        y += 16;
       }
       // Datos del cálculo
       doc.setFontSize(9);
