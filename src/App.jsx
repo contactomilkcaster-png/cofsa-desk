@@ -1507,6 +1507,7 @@ function NominaModule() {
   const [dias, setDias] = useState("30");
   const [primaRiesgo, setPrimaRiesgo] = useState("0.00543");
   const [resultado, setResultado] = useState(null);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
 
   const fmt = (n) => n.toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 });
 
@@ -1519,6 +1520,186 @@ function NominaModule() {
     const d = parseInt(dias) || 30;
     const pr = parseFloat(primaRiesgo) || 0.00543;
     setResultado(calcularNomina(sd, d, pr));
+  };
+
+  const descargarPDF = async () => {
+    if (!resultado) return;
+    setGenerandoPDF(true);
+    try {
+      // Cargar jsPDF dinámicamente
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      document.head.appendChild(script);
+      await new Promise(r => script.onload = r);
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"letter" });
+      const W = 216, M = 18;
+      let y = 20;
+
+      // ── Header con logo ──
+      // Logo en base64 (ya lo tenemos en LOGO_B64)
+      try { doc.addImage(LOGO_B64, "JPEG", M, y, 22, 22); } catch(e) {}
+
+      // Nombre despacho
+      doc.setFontSize(18);
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(27, 42, 74);
+      doc.text("CIA COFSA SERVICE", M + 26, y + 8);
+      doc.setFontSize(9);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text("Consultoría Contable Fiscal y Administrativa", M + 26, y + 14);
+      doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX", { year:"numeric", month:"long", day:"numeric" })}`, M + 26, y + 19);
+
+      // Línea divisora
+      y += 28;
+      doc.setDrawColor(27, 42, 74);
+      doc.setLineWidth(0.8);
+      doc.line(M, y, W - M, y);
+      y += 8;
+
+      // Título
+      doc.setFontSize(14);
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(27, 42, 74);
+      doc.text("CÁLCULO DE NÓMINA 2026", M, y);
+      doc.setFontSize(8);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(100,116,139);
+      doc.text("Art. 96 LISR · IMSS · INFONAVIT — Tablas DOF 28/12/2025", M, y + 5);
+      y += 14;
+
+      // Datos del cálculo
+      doc.setFontSize(9);
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(27,42,74);
+      doc.text(`Tipo: ${tipo.charAt(0).toUpperCase()+tipo.slice(1)}   |   Salario: $${fmt(parseFloat(salario))}   |   Días: ${dias}   |   Prima RT: ${primaRiesgo}`, M, y);
+      y += 10;
+
+      // Resumen en 3 cajas
+      const boxW = (W - M*2 - 8) / 3;
+      const cajas = [
+        { label:"Salario bruto mensual", val:`$${fmt(resultado.sbc_mensual)}`, color:[27,42,74] },
+        { label:"Neto al trabajador", val:`$${fmt(resultado.neto_trabajador)}`, color:[22,163,74] },
+        { label:"Costo total empresa", val:`$${fmt(resultado.costo_total_empresa)}`, color:[220,38,38] },
+      ];
+      cajas.forEach((c, i) => {
+        const x = M + i * (boxW + 4);
+        doc.setFillColor(...c.color);
+        doc.setDrawColor(...c.color);
+        doc.roundedRect(x, y, boxW, 16, 2, 2, "F");
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(11);
+        doc.setFont("helvetica","bold");
+        doc.text(c.val, x + boxW/2, y + 8, { align:"center" });
+        doc.setFontSize(7);
+        doc.setFont("helvetica","normal");
+        doc.text(c.label, x + boxW/2, y + 13, { align:"center" });
+      });
+      y += 22;
+
+      // Tabla desglose
+      const cols = [100, 46, 46];
+      const headerH = 7;
+      doc.setFillColor(27,42,74);
+      doc.rect(M, y, W - M*2, headerH, "F");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(8);
+      doc.setFont("helvetica","bold");
+      doc.text("CONCEPTO", M + 3, y + 5);
+      doc.text("OBRERO", M + cols[0] + cols[1]/2, y + 5, { align:"center" });
+      doc.text("PATRÓN", M + cols[0] + cols[1] + cols[2]/2, y + 5, { align:"center" });
+      y += headerH;
+
+      const filas = [
+        { tipo:"section", label:"IMSS — ENFERMEDADES Y MATERNIDAD" },
+        { label:"Cuota fija (20.40 UMAs)", pat:resultado.d_emFija_pat },
+        { label:"Prest. en especie excedente 3 UMAs", ob:resultado.d_emExc_ob, pat:resultado.d_emExc_pat },
+        { label:"Prestaciones en dinero", ob:resultado.d_emDin_ob, pat:resultado.d_emDin_pat },
+        { label:"Gastos médicos pensionados", ob:resultado.d_emPens_ob, pat:resultado.d_emPens_pat },
+        { tipo:"section", label:"IMSS — OTROS SEGUROS" },
+        { label:`Riesgo de trabajo (${(parseFloat(primaRiesgo)*100).toFixed(3)}%)`, pat:resultado.d_rt_pat },
+        { label:"Invalidez y vida", ob:resultado.d_iv_ob, pat:resultado.d_iv_pat },
+        { label:"Guarderías y prestaciones sociales", pat:resultado.d_guard_pat },
+        { tipo:"section", label:"RCV — RETIRO, CESANTÍA Y VEJEZ (BIMESTRAL ÷2)" },
+        { label:"Retiro (2.00%)", pat:resultado.d_retiro_pat },
+        { label:`CEAV patronal (${fmt(resultado.d_ceav_pat_pct)}% progresivo)`, pat:resultado.d_ceav_pat },
+        { label:"CEAV obrero (1.125%)", ob:resultado.d_ceav_ob },
+        { tipo:"section", label:"INFONAVIT (BIMESTRAL ÷2)" },
+        { label:"Aportación patronal (5%)", pat:resultado.infonavit },
+        { tipo:"total", label:"TOTAL IMSS + INFONAVIT", ob:resultado.imss_obrero, pat:resultado.imss_patron + resultado.infonavit },
+        { tipo:"section", label:"ISR — ART. 96 LISR" },
+        { label:"Base gravable (bruto - IMSS obrero)", ob:resultado.sbc_mensual - resultado.imss_obrero },
+        { label:"ISR bruto (tarifa mensual 2026)", ob:resultado.isr_bruto },
+        { label:"Subsidio al empleo", ob:-resultado.subsidio },
+        { tipo:"highlight", label:"ISR NETO A RETENER", ob:resultado.isr_neto },
+        { tipo:"neto", label:"💰 NETO AL TRABAJADOR", val:resultado.neto_trabajador },
+      ];
+
+      const fila_h = 6;
+      filas.forEach((f, idx) => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        if (f.tipo === "section") {
+          doc.setFillColor(255, 251, 235);
+          doc.rect(M, y, W - M*2, fila_h, "F");
+          doc.setTextColor(217, 119, 6);
+          doc.setFontSize(7);
+          doc.setFont("helvetica","bold");
+          doc.text(f.label, M + 3, y + 4);
+        } else if (f.tipo === "total" || f.tipo === "highlight") {
+          doc.setFillColor(238, 242, 251);
+          doc.rect(M, y, W - M*2, fila_h, "F");
+          doc.setFont("helvetica","bold");
+          doc.setFontSize(8);
+          doc.setTextColor(27,42,74);
+          doc.text(f.label, M + 3, y + 4);
+          if (f.ob !== undefined) { doc.setTextColor(220,38,38); doc.text(`$${fmt(f.ob)}`, M + cols[0] + cols[1] - 3, y + 4, { align:"right" }); }
+          if (f.pat !== undefined) { doc.setTextColor(27,42,74); doc.text(`$${fmt(f.pat)}`, M + cols[0] + cols[1] + cols[2] - 3, y + 4, { align:"right" }); }
+        } else if (f.tipo === "neto") {
+          doc.setFillColor(240, 253, 244);
+          doc.rect(M, y, W - M*2, fila_h + 2, "F");
+          doc.setFont("helvetica","bold");
+          doc.setFontSize(10);
+          doc.setTextColor(22,163,74);
+          doc.text(f.label, M + 3, y + 5);
+          doc.text(`$${fmt(f.val)}`, W - M - 3, y + 5, { align:"right" });
+          y += 2;
+        } else {
+          doc.setFillColor(idx % 2 === 0 ? 249:255, idx % 2 === 0 ? 250:255, idx % 2 === 0 ? 252:255);
+          doc.rect(M, y, W - M*2, fila_h, "F");
+          doc.setFont("helvetica","normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(30,41,59);
+          doc.text(f.label, M + 3, y + 4);
+          if (f.ob !== undefined) { doc.setTextColor(220,38,38); doc.text(f.ob < 0 ? `-$${fmt(Math.abs(f.ob))}` : `$${fmt(f.ob)}`, M + cols[0] + cols[1] - 3, y + 4, { align:"right" }); }
+          if (f.pat !== undefined) { doc.setTextColor(27,42,74); doc.text(`$${fmt(f.pat)}`, M + cols[0] + cols[1] + cols[2] - 3, y + 4, { align:"right" }); }
+        }
+        // Borde fila
+        doc.setDrawColor(226,232,240);
+        doc.setLineWidth(0.1);
+        doc.rect(M, y, W - M*2, f.tipo === "neto" ? fila_h+2 : fila_h, "S");
+        y += f.tipo === "neto" ? fila_h + 2 : fila_h;
+      });
+
+      // Footer
+      y += 6;
+      doc.setDrawColor(27,42,74);
+      doc.setLineWidth(0.4);
+      doc.line(M, y, W - M, y);
+      y += 5;
+      doc.setFontSize(7);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(100,116,139);
+      doc.text("Fuentes: Anexo 8 RMF 2026 (DOF 28/12/2025) · LSS · UMA 2026 $113.14/día · SM 2026 $315.04/día", M, y);
+      doc.text("Los cálculos son referenciales. Valida siempre con el SUA oficial del IMSS.", M, y + 4);
+      doc.text(`CIA COFSA SERVICE — Generado el ${new Date().toLocaleDateString("es-MX")}`, W - M, y, { align:"right" });
+
+      doc.save(`Nomina_COFSA_${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch(e) {
+      console.error("Error PDF:", e);
+    }
+    setGenerandoPDF(false);
   };
 
   const Row = ({ label, obrero, patron, highlight }) => (
@@ -1577,6 +1758,17 @@ function NominaModule() {
 
       {resultado && (
         <div style={{ animation:"fadeUp 0.3s ease" }}>
+          {/* Botón descargar PDF */}
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
+            <button onClick={descargarPDF} disabled={generandoPDF} style={{
+              display:"flex", alignItems:"center", gap:8, background:C.navy, color:C.white,
+              border:"none", borderRadius:10, padding:"10px 22px", cursor:generandoPDF?"not-allowed":"pointer",
+              fontFamily:"inherit", fontWeight:700, fontSize:14, opacity:generandoPDF?0.7:1, transition:"all 0.15s",
+            }}>
+              {generandoPDF ? "⏳ Generando..." : "⬇️ Descargar PDF"}
+            </button>
+          </div>
+
           {/* Resumen ejecutivo */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:14, marginBottom:20 }}>
             {[
