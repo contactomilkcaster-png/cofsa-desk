@@ -784,6 +784,290 @@ function ChatModule({ user }) {
   );
 }
 
+// ── EXPEDIENTE CLIENTE ────────────────────────────────────────────────────
+function ExpedienteCliente({ client, onBack }) {
+  const [tab, setTab] = useState("datos");
+  const [datos, setDatos] = useState(null);
+  const [docs, setDocs] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [showAddDoc, setShowAddDoc] = useState(false);
+  const [showPass, setShowPass] = useState({});
+  const [otrosAccesos, setOtrosAccesos] = useState([]);
+  const [docForm, setDocForm] = useState({ tipo:"Constancia de Situación Fiscal", nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", file:null });
+  const [form, setForm] = useState({ rfc:"", razon_social:"", regimen_fiscal:"", sat_usuario:"", sat_password:"", imss_usuario:"", imss_password:"", infonavit_usuario:"", infonavit_password:"" });
+
+  const TIPOS_DOC = ["Constancia de Situación Fiscal","Opinión de Cumplimiento SAT","Comprobante de pago IMSS","e.firma (.cer)","e.firma (.key)","Acta Constitutiva","Poder Notarial","Otro"];
+
+  const diasVigencia = (fecha) => {
+    if (!fecha) return null;
+    const diff = Math.ceil((new Date(fecha) - new Date()) / (1000*60*60*24));
+    return diff;
+  };
+
+  const vigenciaBadge = (fecha) => {
+    const d = diasVigencia(fecha);
+    if (d === null) return null;
+    if (d < 0) return { label:`Vencido hace ${Math.abs(d)} días`, color:C.red, bg:C.redBg };
+    if (d <= 15) return { label:`⚠️ Vence en ${d} días`, color:C.red, bg:C.redBg };
+    if (d <= 30) return { label:`${d} días restantes`, color:C.yellow, bg:C.yellowBg };
+    return { label:`${d} días restantes`, color:C.green, bg:C.greenBg };
+  };
+
+  const load = async () => {
+    const [d, dc] = await Promise.all([
+      supabase.from("cliente_datos").select("*").eq("cliente_id", client.id).single(),
+      supabase.from("cliente_documentos").select("*").eq("cliente_id", client.id).order("fecha_vencimiento"),
+    ]);
+    if (d.data) {
+      setForm({ rfc:d.data.rfc||"", razon_social:d.data.razon_social||"", regimen_fiscal:d.data.regimen_fiscal||"", sat_usuario:d.data.sat_usuario||"", sat_password:d.data.sat_password||"", imss_usuario:d.data.imss_usuario||"", imss_password:d.data.imss_password||"", infonavit_usuario:d.data.infonavit_usuario||"", infonavit_password:d.data.infonavit_password||"" });
+      setOtrosAccesos(d.data.otros_accesos || []);
+      setDatos(d.data);
+    }
+    setDocs(dc.data || []);
+  };
+
+  useEffect(()=>{ load(); },[client.id]);
+
+  const saveDatos = async () => {
+    setSaving(true);
+    const payload = { ...form, cliente_id:client.id, otros_accesos:otrosAccesos, updated_at:new Date().toISOString() };
+    if (datos) await supabase.from("cliente_datos").update(payload).eq("id", datos.id);
+    else await supabase.from("cliente_datos").insert([payload]);
+    setSaving(false);
+    load();
+  };
+
+  const uploadDoc = async () => {
+    if (!docForm.nombre.trim()) return;
+    setUploading(true);
+    let file_url = null, file_name = null;
+    if (docForm.file) {
+      const ext = docForm.file.name.split(".").pop();
+      const path = `${client.id}/${Date.now()}.${ext}`;
+      const { data: up } = await supabase.storage.from("documentos").upload(path, docForm.file);
+      if (up) {
+        const { data: pub } = supabase.storage.from("documentos").getPublicUrl(path);
+        file_url = pub.publicUrl;
+        file_name = docForm.file.name;
+      }
+    }
+    await supabase.from("cliente_documentos").insert([{ cliente_id:client.id, tipo:docForm.tipo, nombre:docForm.nombre, fecha_emision:docForm.fecha_emision||null, fecha_vencimiento:docForm.fecha_vencimiento||null, notas:docForm.notas, file_url, file_name }]);
+    setUploading(false);
+    setShowAddDoc(false);
+    setDocForm({ tipo:"Constancia de Situación Fiscal", nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", file:null });
+    load();
+  };
+
+  const delDoc = async (id, file_url) => {
+    if (file_url) {
+      const path = file_url.split("/documentos/")[1];
+      if (path) await supabase.storage.from("documentos").remove([path]);
+    }
+    await supabase.from("cliente_documentos").delete().eq("id", id);
+    load();
+  };
+
+  const addOtro = () => setOtrosAccesos(p=>[...p, { sistema:"", usuario:"", password:"" }]);
+  const updateOtro = (i, field, val) => setOtrosAccesos(p=>p.map((o,idx)=>idx===i?{...o,[field]:val}:o));
+  const delOtro = (i) => setOtrosAccesos(p=>p.filter((_,idx)=>idx!==i));
+
+  const TABS = [{ id:"datos", label:"📋 Datos & Accesos" },{ id:"documentos", label:"📁 Documentos" }];
+
+  return (
+    <div style={{ padding:28, maxWidth:900 }}>
+      <style>{ANIM}</style>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:28, animation:"fadeUp 0.3s ease" }}>
+        <button onClick={onBack} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13 }}>← Volver</button>
+        <div style={{ width:46, height:46, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏢</div>
+        <div>
+          <h1 style={{ margin:0, color:C.navy, fontSize:20, fontWeight:800 }}>{client.name}</h1>
+          <p style={{ margin:0, color:C.muted, fontSize:13 }}>Expediente del cliente</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:4, marginBottom:24, background:C.panel, borderRadius:11, padding:4, width:"fit-content", border:`1px solid ${C.border}` }}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:"9px 20px", borderRadius:8, border:"none", background:tab===t.id?C.navy:"transparent", color:tab===t.id?C.white:C.muted, cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13, transition:"all 0.15s" }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── TAB DATOS ── */}
+      {tab==="datos" && (
+        <div style={{ animation:"fadeUp 0.25s ease" }}>
+          <Card style={{ marginBottom:16 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>📄</span> Datos Fiscales
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="RFC" value={form.rfc} onChange={e=>setForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
+              <Input label="Razón Social" value={form.razon_social} onChange={e=>setForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre o razón social" />
+            </div>
+            <Input label="Régimen Fiscal" value={form.regimen_fiscal} onChange={e=>setForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="Ej: 601 - General de Ley Personas Morales" />
+          </Card>
+
+          <Card style={{ marginBottom:16 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.yellowBg, padding:"5px 9px", borderRadius:8 }}>🔐</span> Accesos SAT
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Usuario SAT" value={form.sat_usuario} onChange={e=>setForm(p=>({...p,sat_usuario:e.target.value}))} placeholder="RFC o usuario" />
+              <div style={{ marginBottom:14 }}>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña SAT</div>
+                <div style={{ position:"relative" }}>
+                  <input type={showPass.sat?"text":"password"} value={form.sat_password} onChange={e=>setForm(p=>({...p,sat_password:e.target.value}))}
+                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  <button onClick={()=>setShowPass(p=>({...p,sat:!p.sat}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.sat?"🙈":"👁️"}</button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card style={{ marginBottom:16 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.greenBg, padding:"5px 9px", borderRadius:8 }}>🏥</span> Accesos IMSS
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Usuario IMSS" value={form.imss_usuario} onChange={e=>setForm(p=>({...p,imss_usuario:e.target.value}))} placeholder="Número patronal o usuario" />
+              <div style={{ marginBottom:14 }}>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña IMSS</div>
+                <div style={{ position:"relative" }}>
+                  <input type={showPass.imss?"text":"password"} value={form.imss_password} onChange={e=>setForm(p=>({...p,imss_password:e.target.value}))}
+                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  <button onClick={()=>setShowPass(p=>({...p,imss:!p.imss}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.imss?"🙈":"👁️"}</button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card style={{ marginBottom:16 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🏠</span> Accesos INFONAVIT
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Usuario INFONAVIT" value={form.infonavit_usuario} onChange={e=>setForm(p=>({...p,infonavit_usuario:e.target.value}))} placeholder="Usuario" />
+              <div style={{ marginBottom:14 }}>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña INFONAVIT</div>
+                <div style={{ position:"relative" }}>
+                  <input type={showPass.infonavit?"text":"password"} value={form.infonavit_password} onChange={e=>setForm(p=>({...p,infonavit_password:e.target.value}))}
+                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                  <button onClick={()=>setShowPass(p=>({...p,infonavit:!p.infonavit}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.infonavit?"🙈":"👁️"}</button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card style={{ marginBottom:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={{ color:C.navy, fontWeight:700, fontSize:15, display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🔗</span> Otros accesos
+              </div>
+              <Btn variant="ghost" onClick={addOtro} style={{ padding:"6px 14px", fontSize:12 }}>+ Agregar</Btn>
+            </div>
+            {otrosAccesos.length===0 && <div style={{ color:C.muted, fontSize:13 }}>Sin otros accesos registrados</div>}
+            {otrosAccesos.map((o,i)=>(
+              <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, marginBottom:10, alignItems:"end" }}>
+                <Input label={i===0?"Sistema":""} value={o.sistema} onChange={e=>updateOtro(i,"sistema",e.target.value)} placeholder="Ej: IMPI, ISSSTE…" style={{ marginBottom:0 }} />
+                <Input label={i===0?"Usuario":""} value={o.usuario} onChange={e=>updateOtro(i,"usuario",e.target.value)} placeholder="Usuario" style={{ marginBottom:0 }} />
+                <div>
+                  {i===0 && <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña</div>}
+                  <div style={{ position:"relative" }}>
+                    <input type={showPass[`otro${i}`]?"text":"password"} value={o.password} onChange={e=>updateOtro(i,"password",e.target.value)}
+                      style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 36px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                    <button onClick={()=>setShowPass(p=>({...p,[`otro${i}`]:!p[`otro${i}`]}))} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:13 }}>{showPass[`otro${i}`]?"🙈":"👁️"}</button>
+                  </div>
+                </div>
+                <button onClick={()=>delOtro(i)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"10px 12px", fontFamily:"inherit" }}>✕</button>
+              </div>
+            ))}
+          </Card>
+
+          <Btn onClick={saveDatos} loading={saving} style={{ width:"100%", padding:14, fontSize:15 }}>💾 Guardar datos del cliente</Btn>
+        </div>
+      )}
+
+      {/* ── TAB DOCUMENTOS ── */}
+      {tab==="documentos" && (
+        <div style={{ animation:"fadeUp 0.25s ease" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15 }}>{docs.length} documentos registrados</div>
+            <Btn onClick={()=>setShowAddDoc(true)}>+ Subir documento</Btn>
+          </div>
+
+          {docs.length===0 ? (
+            <Card style={{ textAlign:"center", padding:48 }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📁</div>
+              <div style={{ color:C.muted, fontSize:14 }}>Sin documentos — sube el primero ↗</div>
+            </Card>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {docs.map(doc=>{
+                const badge = vigenciaBadge(doc.fecha_vencimiento);
+                const dias = diasVigencia(doc.fecha_vencimiento);
+                return (
+                  <Card key={doc.id} style={{ padding:18 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                      <div style={{ width:44, height:44, borderRadius:10, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+                        {doc.tipo.includes(".cer")||doc.tipo.includes(".key")?"🔑":doc.tipo.includes("IMSS")?"🏥":doc.tipo.includes("Acta")?"📜":"📄"}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.nombre}</div>
+                        <div style={{ color:C.muted, fontSize:12, marginTop:2 }}>{doc.tipo}</div>
+                        {doc.notas && <div style={{ color:C.muted, fontSize:11, marginTop:2, fontStyle:"italic" }}>{doc.notas}</div>}
+                      </div>
+                      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8, flexShrink:0 }}>
+                        {badge && <span style={{ background:badge.bg, color:badge.color, borderRadius:8, padding:"4px 12px", fontSize:12, fontWeight:700 }}>{badge.label}</span>}
+                        {doc.fecha_vencimiento && <div style={{ color:C.muted, fontSize:11 }}>Vence: {doc.fecha_vencimiento}</div>}
+                        {doc.fecha_emision && <div style={{ color:C.muted, fontSize:11 }}>Emitido: {doc.fecha_emision}</div>}
+                      </div>
+                      <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+                        {doc.file_url && <a href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:8, padding:"8px 12px", fontSize:12, fontWeight:600, textDecoration:"none", cursor:"pointer" }}>⬇️ Descargar</a>}
+                        <button onClick={()=>delDoc(doc.id, doc.file_url)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"8px 12px", fontFamily:"inherit", fontSize:12 }}>🗑️</button>
+                      </div>
+                    </div>
+                    {/* Barra de vigencia */}
+                    {dias !== null && dias >= 0 && dias <= 90 && (
+                      <div style={{ marginTop:12, background:C.panel, borderRadius:6, height:6, overflow:"hidden" }}>
+                        <div style={{ width:`${Math.min(100, (dias/90)*100)}%`, height:"100%", background: dias<=15?C.red:dias<=30?C.yellow:C.green, borderRadius:6, transition:"width 0.5s ease" }} />
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {showAddDoc && (
+            <Modal title="Subir documento" onClose={()=>setShowAddDoc(false)} width={540}>
+              <FieldSelect label="Tipo de documento" value={docForm.tipo} onChange={e=>setDocForm(p=>({...p,tipo:e.target.value}))}>
+                {TIPOS_DOC.map(t=><option key={t}>{t}</option>)}
+              </FieldSelect>
+              <Input label="Nombre / descripción *" value={docForm.nombre} onChange={e=>setDocForm(p=>({...p,nombre:e.target.value}))} placeholder="Ej: Constancia Q1 2025" />
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Fecha de emisión" type="date" value={docForm.fecha_emision} onChange={e=>setDocForm(p=>({...p,fecha_emision:e.target.value}))} />
+                <Input label="Fecha de vencimiento" type="date" value={docForm.fecha_vencimiento} onChange={e=>setDocForm(p=>({...p,fecha_vencimiento:e.target.value}))} />
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Archivo (PDF, .cer, .key, etc.)</div>
+                <input type="file" onChange={e=>setDocForm(p=>({...p,file:e.target.files[0]}))}
+                  style={{ width:"100%", background:C.panel, border:`1.5px dashed ${C.border}`, borderRadius:9, padding:"12px 14px", color:C.muted, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box" }} />
+                {docForm.file && <div style={{ color:C.green, fontSize:12, marginTop:6 }}>✓ {docForm.file.name}</div>}
+              </div>
+              <Input label="Notas (opcional)" value={docForm.notas} onChange={e=>setDocForm(p=>({...p,notas:e.target.value}))} placeholder="Observaciones…" />
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+                <Btn variant="ghost" onClick={()=>setShowAddDoc(false)}>Cancelar</Btn>
+                <Btn onClick={uploadDoc} loading={uploading} disabled={!docForm.nombre.trim()}>Subir documento</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CLIENTES ───────────────────────────────────────────────────────────────
 function ClientesModule({ onNavigate }) {
   const [taxes, setTaxes] = useState([]);
@@ -794,6 +1078,7 @@ function ClientesModule({ onNavigate }) {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -825,6 +1110,8 @@ function ClientesModule({ onNavigate }) {
     load();
   };
 
+  if (selectedClient) return <ExpedienteCliente client={selectedClient} onBack={()=>setSelectedClient(null)} />;
+
   return (
     <div style={{ padding:28 }}>
       <style>{ANIM}</style>
@@ -851,14 +1138,11 @@ function ClientesModule({ onNavigate }) {
             const presented = ctaxes.filter(t=>t.status==="presentado").length;
             return (
               <div key={client.id} className="card" style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:14, padding:22, boxShadow:"0 1px 4px rgba(0,0,0,0.05)", transition:"all 0.2s" }}>
-                {/* Header */}
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
                   <div style={{ width:44, height:44, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🏢</div>
-                  <div style={{ flex:1, color:C.navy, fontWeight:700, fontSize:14, lineHeight:1.3 }}>{client.name}</div>
+                  <div onClick={()=>setSelectedClient(client)} style={{ flex:1, color:C.navy, fontWeight:700, fontSize:14, lineHeight:1.3, cursor:"pointer", textDecoration:"underline dotted" }} title="Ver expediente">{client.name}</div>
                   <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:16, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
                 </div>
-
-                {/* Stats — clickeables */}
                 <div style={{ display:"flex", gap:8 }}>
                   {[
                     { lbl:"Pendientes", val:pending, color:C.yellow, bg:C.yellowBg, module:"impuestos", filter:"pendiente" },
@@ -881,7 +1165,6 @@ function ClientesModule({ onNavigate }) {
         </div>
       )}
 
-      {/* Modal agregar cliente */}
       {showAdd && (
         <Modal title="Agregar nuevo cliente" onClose={()=>setShowAdd(false)} width={420}>
           <Input label="Nombre del cliente *" value={newName} onChange={e=>setNewName(e.target.value)}
@@ -893,7 +1176,6 @@ function ClientesModule({ onNavigate }) {
         </Modal>
       )}
 
-      {/* Modal confirmar eliminar */}
       {confirmDel && (
         <Modal title="Eliminar cliente" onClose={()=>setConfirmDel(null)} width={420}>
           <p style={{ color:C.text, fontSize:14, marginBottom:20 }}>
