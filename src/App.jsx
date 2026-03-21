@@ -735,6 +735,19 @@ function ChatModule({ user }) {
     }
   };
 
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const startEdit = (msg) => { setEditingId(msg.id); setEditText(msg.text); };
+  const cancelEdit = () => { setEditingId(null); setEditText(""); };
+
+  const saveEdit = async (id) => {
+    if (!editText.trim()) return;
+    setMessages(prev=>prev.map(m=>m.id===id ? {...m, text:editText.trim(), edited:true} : m));
+    await supabase.from("mensajes").update({ text:editText.trim(), edited:true }).eq("id", id);
+    setEditingId(null); setEditText("");
+  };
+
   const colorFor = (id) => {
     const colors = [C.navy, C.navyLight, "#3A5FA0", "#16A34A"];
     return colors[(id?.charCodeAt(0)||0) % colors.length];
@@ -779,13 +792,40 @@ function ChatModule({ user }) {
             const email = m.from_email||"usuario";
             const initials = email.substring(0,2).toUpperCase();
             const color = colorFor(m.from_user);
+            const isEditing = editingId===m.id;
             return (
-              <div key={m.id} style={{ display:"flex", gap:10, padding:"5px 0", flexDirection:isMe?"row-reverse":"row" }}>
+              <div key={m.id} style={{ display:"flex", gap:10, padding:"5px 0", flexDirection:isMe?"row-reverse":"row" }}
+                onMouseEnter={e=>{ if(isMe) e.currentTarget.querySelector(".edit-btn")?.style && (e.currentTarget.querySelector(".edit-btn").style.opacity="1"); }}
+                onMouseLeave={e=>{ if(isMe) e.currentTarget.querySelector(".edit-btn")?.style && (e.currentTarget.querySelector(".edit-btn").style.opacity="0"); }}>
                 {!isMe && <div style={{ width:34, height:34, borderRadius:"50%", background:color+"22", border:`2px solid ${color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color, flexShrink:0 }}>{initials}</div>}
                 <div style={{ maxWidth:"68%" }}>
                   {!isMe && <div style={{ color, fontSize:11, fontWeight:700, marginBottom:3 }}>{email}</div>}
-                  <div style={{ background:isMe?C.navy:C.surface, border:isMe?"none":`1px solid ${C.border}`, borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px", padding:"10px 14px", color:isMe?C.white:C.text, fontSize:14, lineHeight:1.5, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>{m.text}</div>
-                  <div style={{ color:C.muted, fontSize:10, marginTop:3, textAlign:isMe?"right":"left" }}>{new Date(m.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
+                  {isEditing ? (
+                    <div style={{ display:"flex", gap:6, alignItems:"flex-end" }}>
+                      <textarea value={editText} onChange={e=>setEditText(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();saveEdit(m.id);} if(e.key==="Escape") cancelEdit(); }}
+                        autoFocus rows={2}
+                        style={{ background:C.panel, border:`2px solid ${C.navy}`, borderRadius:10, padding:"8px 12px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"none", minWidth:200, boxSizing:"border-box" }} />
+                      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                        <button onClick={()=>saveEdit(m.id)} style={{ background:C.navy, border:"none", color:C.white, borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit" }}>✓</button>
+                        <button onClick={cancelEdit} style={{ background:C.panel, border:`1px solid ${C.border}`, color:C.muted, borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ position:"relative" }}>
+                      <div style={{ background:isMe?C.navy:C.surface, border:isMe?"none":`1px solid ${C.border}`, borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px", padding:"10px 14px", color:isMe?C.white:C.text, fontSize:14, lineHeight:1.5, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                        {m.text}
+                      </div>
+                      {isMe && (
+                        <button className="edit-btn" onClick={()=>startEdit(m)}
+                          style={{ position:"absolute", top:-6, left:-30, opacity:0, transition:"opacity 0.15s", background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:"pointer", fontSize:11, color:C.muted }}>✏️</button>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ color:C.muted, fontSize:10, marginTop:3, textAlign:isMe?"right":"left" }}>
+                    {new Date(m.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}
+                    {m.edited && <span style={{ marginLeft:4, fontStyle:"italic" }}>(editado)</span>}
+                  </div>
                 </div>
               </div>
             );
