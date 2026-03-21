@@ -38,14 +38,14 @@ const TAX_TYPES = ["ISR Mensual", "IVA Mensual", "ISR Anual", "DIOT", "PTU", "De
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 const ANIM = `
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600&display=swap');
 @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Outfit', sans-serif; background: ${C.bg}; }
+body { font-family: 'Montserrat', sans-serif; background: ${C.bg}; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
@@ -119,8 +119,7 @@ function Input({ label, ...props }) {
   return (
     <div style={{ marginBottom:16 }}>
       {label && <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{label}</div>}
-      <input {...props} style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box", transition:"border-color 0.15s", ...props.style }}
-        onFocus={e=>{e.target.style.borderColor=C.navy}} onBlur={e=>{e.target.style.borderColor=C.border}} />
+      <input {...props} style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:`2px solid ${C.navy}`, outlineOffset:"-1px", fontFamily:"inherit", boxSizing:"border-box", ...props.style }} />
     </div>
   );
 }
@@ -218,7 +217,7 @@ function LoginScreen({ onLogin }) {
           <div style={{ width:110, height:110, borderRadius:24, background:"rgba(255,255,255,0.12)", backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 20px", boxShadow:"0 8px 32px rgba(0,0,0,0.2)" }}>
             <img src={LOGO_B64} alt="COFSA" style={{ width:86, height:86, objectFit:"contain", borderRadius:12 }} />
           </div>
-          <div style={{ color:"rgba(255,255,255,0.95)", fontSize:28, fontWeight:800, letterSpacing:"-0.03em", fontFamily:"'DM Serif Display', serif" }}>COFSA DESK</div>
+          <div style={{ color:"rgba(255,255,255,0.95)", fontSize:28, fontWeight:800, letterSpacing:"-0.03em", fontFamily:"'Montserrat', sans-serif" }}>COFSA DESK</div>
           <div style={{ color:"rgba(255,255,255,0.55)", fontSize:13, marginTop:4, letterSpacing:"0.04em" }}>Consultoría Contable Fiscal y Administrativa</div>
         </div>
 
@@ -258,7 +257,7 @@ function Sidebar({ active, onNav, user, onLogout, notifCount }) {
             <img src={LOGO_B64} alt="COFSA" style={{ width:32, height:32, objectFit:"contain" }} />
           </div>
           <div>
-            <div style={{ color:C.white, fontWeight:800, fontSize:14, letterSpacing:"-0.01em", fontFamily:"'DM Serif Display', serif" }}>COFSA DESK</div>
+            <div style={{ color:C.white, fontWeight:800, fontSize:14, letterSpacing:"-0.01em", fontFamily:"'Montserrat', sans-serif" }}>COFSA DESK</div>
             <div style={{ color:"rgba(255,255,255,0.4)", fontSize:9, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:1 }}>Sistema de gestión</div>
           </div>
         </div>
@@ -320,7 +319,7 @@ function Dashboard({ taxes, tasks }) {
     <div style={{ padding:28, maxWidth:1100 }}>
       <style>{ANIM}</style>
       <div style={{ marginBottom:28, animation:"fadeUp 0.35s ease" }}>
-        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:24, fontWeight:800, fontFamily:"'DM Serif Display', serif" }}>Dashboard</h1>
+        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:24, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Dashboard</h1>
         <p style={{ margin:0, color:C.muted, fontSize:14 }}>{new Date().toLocaleDateString("es-MX",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
       </div>
 
@@ -329,7 +328,7 @@ function Dashboard({ taxes, tasks }) {
           <div key={c.label} className="card" style={{ background:c.bg, border:`1.5px solid ${c.border}33`, borderRadius:14, padding:22, position:"relative", overflow:"hidden" }}>
             <div style={{ position:"absolute", top:-10, right:-10, fontSize:48, opacity:0.08 }}>{c.icon}</div>
             <div style={{ fontSize:20, marginBottom:10 }}>{c.icon}</div>
-            <div style={{ color:c.color, fontSize:34, fontWeight:800, lineHeight:1, fontFamily:"'DM Serif Display', serif" }}>{c.value}</div>
+            <div style={{ color:c.color, fontSize:34, fontWeight:800, lineHeight:1, fontFamily:"'Montserrat', sans-serif" }}>{c.value}</div>
             <div style={{ color:c.color, fontSize:12, marginTop:6, fontWeight:500, opacity:0.8 }}>{c.label}</div>
           </div>
         ))}
@@ -415,7 +414,7 @@ function ImpuestosModule({ user }) {
       <style>{ANIM}</style>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
         <div>
-          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'DM Serif Display', serif" }}>Control de Impuestos</h1>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Control de Impuestos</h1>
           <p style={{ margin:0, color:C.muted, fontSize:13 }}>{taxes.length} registros totales</p>
         </div>
         <Btn onClick={()=>setShowAdd(true)}>+ Agregar registro</Btn>
@@ -564,7 +563,7 @@ function TareasModule({ user }) {
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
         <div>
-          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'DM Serif Display', serif" }}>Tareas</h1>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Tareas</h1>
           <p style={{ margin:0, color:C.muted, fontSize:13 }}>{tasks.length} tareas registradas</p>
         </div>
         <div style={{ display:"flex", gap:10 }}>
@@ -750,8 +749,8 @@ function ChatModule({ user }) {
           <div style={{ display:"flex", gap:10 }}>
             <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),send())}
               placeholder={`Mensaje en ${CHANNELS.find(c=>c.id===channel)?.label}…`}
-              style={{ flex:1, background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"11px 16px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", transition:"border-color 0.15s" }}
-              onFocus={e=>{e.target.style.borderColor=C.navy}} onBlur={e=>{e.target.style.borderColor=C.border}} />
+              style={{ flex:1, background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"11px 16px", color:C.text, fontSize:14, outline:`2px solid ${C.navy}`, outlineOffset:"-1px", fontFamily:"inherit", transition:"border-color 0.15s" }}
+              />
             <Btn onClick={send} disabled={!text.trim()} style={{ padding:"11px 20px", flexShrink:0 }}>Enviar ↑</Btn>
           </div>
         </div>
@@ -775,7 +774,7 @@ function ClientesModule() {
     <div style={{ padding:28 }}>
       <style>{ANIM}</style>
       <div style={{ marginBottom:24, animation:"fadeUp 0.3s ease" }}>
-        <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'DM Serif Display', serif" }}>Clientes</h1>
+        <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Clientes</h1>
         <p style={{ margin:0, color:C.muted, fontSize:13 }}>{CLIENTS.length} clientes registrados</p>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:16 }}>
@@ -794,7 +793,7 @@ function ClientesModule() {
               <div style={{ display:"flex", gap:8 }}>
                 {[["Pendientes",pending,C.yellow,C.yellowBg],["Presentados",presented,C.green,C.greenBg],["Tareas",ctasks.length,C.accent,C.navyDim]].map(([lbl,val,color,bg])=>(
                   <div key={lbl} style={{ flex:1, background:bg, borderRadius:9, padding:"10px 8px", textAlign:"center" }}>
-                    <div style={{ color, fontSize:20, fontWeight:800, fontFamily:"'DM Serif Display', serif" }}>{val}</div>
+                    <div style={{ color, fontSize:20, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>{val}</div>
                     <div style={{ color, fontSize:10, marginTop:2, fontWeight:500, opacity:0.8 }}>{lbl}</div>
                   </div>
                 ))}
@@ -860,7 +859,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Outfit', sans-serif" }}>
+    <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Montserrat', sans-serif" }}>
       <style>{ANIM}</style>
       <Sidebar active={activeModule} onNav={setActiveModule} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} />
       <main style={{ flex:1, overflowY:activeModule==="chat"?"hidden":"auto" }}>
