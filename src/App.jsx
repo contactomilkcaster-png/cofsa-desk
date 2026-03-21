@@ -1508,6 +1508,8 @@ function NominaModule() {
   const [primaRiesgo, setPrimaRiesgo] = useState("0.00543");
   const [resultado, setResultado] = useState(null);
   const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [nombreTrabajador, setNombreTrabajador] = useState("");
+  const [nombreEmpresa, setNombreEmpresa] = useState("");
 
   const fmt = (n) => n.toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 });
 
@@ -1570,11 +1572,30 @@ function NominaModule() {
       doc.text("Art. 96 LISR · IMSS · INFONAVIT — Tablas DOF 28/12/2025", M, y + 5);
       y += 14;
 
+      // Datos del trabajador y empresa
+      doc.setFontSize(9);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(27,42,74);
+      if (nombreTrabajador || nombreEmpresa) {
+        doc.setFillColor(238, 242, 251);
+        doc.roundedRect(M, y, TW || W - M*2, 14, 2, 2, "F");
+        doc.setFont("helvetica","bold");
+        doc.setFontSize(9);
+        doc.setTextColor(27,42,74);
+        if (nombreTrabajador) doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 6);
+        if (nombreEmpresa) doc.text(`Empresa: ${nombreEmpresa}`, M + 4, y + 11);
+        if (nombreTrabajador && nombreEmpresa) {
+          // Mostrar en dos columnas
+          doc.text(`Trabajador: ${nombreTrabajador}`, M + 4, y + 9);
+          doc.text(`Empresa: ${nombreEmpresa}`, M + (W - M*2)/2 + 4, y + 9);
+        }
+        y += 18;
+      }
       // Datos del cálculo
       doc.setFontSize(9);
       doc.setFont("helvetica","bold");
       doc.setTextColor(27,42,74);
-      doc.text(`Tipo: ${tipo.charAt(0).toUpperCase()+tipo.slice(1)}   |   Salario: $${fmt(parseFloat(salario))}   |   Días: ${dias}   |   Prima RT: ${primaRiesgo}`, M, y);
+      doc.text(`Tipo: ${tipo.charAt(0).toUpperCase()+tipo.slice(1)}   |   Salario: $${fmt(parseFloat(salario))}   |   Dias: ${dias}   |   Prima RT: ${primaRiesgo}`, M, y);
       y += 10;
 
       // Resumen en 3 cajas
@@ -1737,6 +1758,20 @@ function NominaModule() {
 
       {/* Inputs */}
       <Card style={{ marginBottom:20, animation:"fadeUp 0.35s ease" }}>
+        {/* Fila 1: Datos del trabajador */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Nombre del trabajador</div>
+            <input value={nombreTrabajador} onChange={e=>setNombreTrabajador(e.target.value)} placeholder="Ej: Juan García López"
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+          </div>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Empresa / Cliente</div>
+            <input value={nombreEmpresa} onChange={e=>setNombreEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A. de C.V."
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+          </div>
+        </div>
+        {/* Fila 2: Parámetros de cálculo */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16, alignItems:"end" }}>
           <div>
             <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Tipo de trabajador</div>
