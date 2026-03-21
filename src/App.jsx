@@ -1528,19 +1528,24 @@ function NominaModule() {
     if (!resultado) return;
     setGenerandoPDF(true);
     try {
-      // Cargar jsPDF dinámicamente
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      document.head.appendChild(script);
-      await new Promise(r => script.onload = r);
+      // Cargar jsPDF solo si no está ya cargado
+      if (!window.jspdf) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
 
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"letter" });
       const W = 216, M = 18;
+      const TW = W - M * 2;
       let y = 20;
 
       // ── Header con logo ──
-      // Logo en base64 (ya lo tenemos en LOGO_B64)
       try { doc.addImage(LOGO_B64, "JPEG", M, y, 22, 22); } catch(e) {}
 
       // Nombre despacho
@@ -1622,7 +1627,6 @@ function NominaModule() {
 
       // Tabla desglose
       // Columnas: concepto=110mm, obrero=38mm, patron=32mm (total=180mm = W-M*2)
-      const TW = W - M * 2; // 180
       const C1 = 110, C2 = 38, C3 = 32;
       const xOb = M + C1 + C2;   // fin columna obrero
       const xPat = M + C1 + C2 + C3; // fin columna patron
