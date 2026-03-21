@@ -252,6 +252,7 @@ const NAV = [
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
+  { id:"nomina", icon:"💵", label:"Nómina" },
   { id:"asistente", icon:"🤖", label:"Asistente IA" },
 ];
 
@@ -1366,6 +1367,296 @@ function ClientesModule({ onNavigate }) {
   );
 }
 
+// ── NÓMINA 2026 ───────────────────────────────────────────────────────────
+
+// Tabla ISR Mensual 2026 — Art. 96 LISR, Anexo 8 RMF 2026 (DOF 28/12/2025)
+const ISR_2026 = [
+  { li:0.01,       ls:844.59,      cf:0,          pct:1.92  },
+  { li:844.60,     ls:7,164.87,    cf:16.21,      pct:6.40  },
+  { li:7164.88,    ls:12,592.35,   cf:420.78,     pct:10.88 },
+  { li:12592.36,   ls:14,624.89,   cf:1010.83,    pct:16.00 },
+  { li:14624.90,   ls:17,501.53,   cf:1336.15,    pct:17.92 },
+  { li:17501.54,   ls:35,296.62,   cf:1852.04,    pct:21.36 },
+  { li:35296.63,   ls:55,633.29,   cf:5654.65,    pct:23.52 },
+  { li:55633.30,   ls:106,233.00,  cf:10437.49,   pct:30.00 },
+  { li:106233.01,  ls:141,617.45,  cf:25617.84,   pct:32.00 },
+  { li:141617.46,  ls:424,852.50,  cf:36939.04,   pct:34.00 },
+  { li:424852.51,  ls:Infinity,    cf:133242.90,  pct:35.00 },
+];
+
+// Subsidio al Empleo 2026 — Decreto DOF 01/05/2024 (cuota fija UMA)
+// Monto mensual fijo: $406.83 para ingresos ≤ $9,081.00 (aprox 3 UMAs mensuales)
+// Se eliminaron las tablas por tramos, ahora es cuota fija basada en UMA
+const UMA_DIARIA_2026  = 113.14;
+const UMA_MENSUAL_2026 = UMA_DIARIA_2026 * 30.4; // 3,439.46
+const SM_DIARIO_2026   = 315.04;  // Salario mínimo general 2026 (CONASAMI)
+const SM_MENSUAL_2026  = SM_DIARIO_2026 * 30.4;  // 9,577.22
+
+const SUBSIDIO_TOPE_2026 = 406.83;
+const SUBSIDIO_LIMITE_INGRESO = UMA_MENSUAL_2026 * 3; // ~$10,318 aprox
+
+// Cuotas IMSS 2026 (% sobre SBC mensual)
+const IMSS_2026 = {
+  // Enfermedades y Maternidad
+  emCuotaFija_pat:    20.40 / 30.4,  // 20.40 UMA diaria por mes → se calcula como cuota fija mensual
+  emPrestEspecie_pat: 0.0110,
+  emPrestEspecie_ob:  0.00400,
+  emPrestDinero_pat:  0.00700,
+  emPrestDinero_ob:   0.00250,
+  emGasMedPens_pat:   0.01050,
+  emGasMedPens_ob:    0.00375,
+  // Invalidez y Vida
+  iv_pat:   0.01750,
+  iv_ob:    0.00625,
+  // Guarderías y Prestaciones Sociales (solo patrón)
+  guard_pat: 0.01000,
+  // Retiro (solo patrón)
+  retiro_pat: 0.02000,
+  // CEAV obrero fijo
+  ceav_ob: 0.01125,
+  // INFONAVIT (solo patrón)
+  infonavit_pat: 0.05000,
+  // Riesgo de trabajo (clase I por default)
+  rt_pat: 0.00543,
+};
+
+// CEAV patronal 2026 progresivo (reforma pensiones 2020, 4to año)
+function ceav_pat_2026(sbc_diario) {
+  const veces_uma = sbc_diario / UMA_DIARIA_2026;
+  if (veces_uma <= 1.00) return 0.03150;
+  if (veces_uma <= 1.50) return 0.03544;
+  if (veces_uma <= 2.00) return 0.03940;
+  if (veces_uma <= 2.50) return 0.04330;
+  if (veces_uma <= 3.00) return 0.04720;
+  if (veces_uma <= 3.50) return 0.05110;
+  if (veces_uma <= 4.00) return 0.05500;
+  return 0.07513; // 4.01 UMA en adelante
+}
+
+function calcularNomina(salarioDiario, diasTrabajados = 30, primaRiesgo = 0.00543) {
+  const sbc_diario = salarioDiario;
+  const sbc_mensual = sbc_diario * diasTrabajados;
+  const sbc_bimestral = sbc_diario * 60;
+
+  // ── IMSS ──
+  const uma_mensual = UMA_MENSUAL_2026;
+  const excedente3uma = Math.max(0, sbc_mensual - uma_mensual * 3);
+
+  // Cuota fija EM: 20.40 UMAs diarias × 30.4 días (mensual) → solo patrón
+  const emFija_pat = UMA_DIARIA_2026 * 20.40;
+  const emExc_pat  = excedente3uma * IMSS_2026.emPrestEspecie_pat;
+  const emExc_ob   = excedente3uma * IMSS_2026.emPrestEspecie_ob;
+  const emDin_pat  = sbc_mensual   * IMSS_2026.emPrestDinero_pat;
+  const emDin_ob   = sbc_mensual   * IMSS_2026.emPrestDinero_ob;
+  const emPens_pat = sbc_mensual   * IMSS_2026.emGasMedPens_pat;
+  const emPens_ob  = sbc_mensual   * IMSS_2026.emGasMedPens_ob;
+  const rt_pat     = sbc_mensual   * primaRiesgo;
+  const iv_pat     = sbc_mensual   * IMSS_2026.iv_pat;
+  const iv_ob      = sbc_mensual   * IMSS_2026.iv_ob;
+  const guard_pat  = sbc_mensual   * IMSS_2026.guard_pat;
+
+  // RCV bimestral (convertido a mensual /2)
+  const retiro_pat  = (sbc_bimestral * IMSS_2026.retiro_pat)   / 2;
+  const ceav_pat_pct = ceav_pat_2026(sbc_diario);
+  const ceav_pat    = (sbc_bimestral * ceav_pat_pct)            / 2;
+  const ceav_ob     = (sbc_bimestral * IMSS_2026.ceav_ob)       / 2;
+  const infonavit   = (sbc_bimestral * IMSS_2026.infonavit_pat) / 2;
+
+  const imss_obrero  = emExc_ob + emDin_ob + emPens_ob + iv_ob + ceav_ob;
+  const imss_patron  = emFija_pat + emExc_pat + emDin_pat + emPens_pat + rt_pat + iv_pat + guard_pat + retiro_pat + ceav_pat;
+
+  // ── ISR ──
+  const base_gravable = sbc_mensual - imss_obrero;
+  let isr_bruto = 0;
+  for (const t of ISR_2026) {
+    if (base_gravable >= t.li && base_gravable <= t.ls) {
+      isr_bruto = t.cf + (base_gravable - t.li) * (t.pct / 100);
+      break;
+    }
+  }
+
+  // Subsidio al empleo
+  let subsidio = 0;
+  if (base_gravable <= SUBSIDIO_LIMITE_INGRESO) {
+    subsidio = SUBSIDIO_TOPE_2026;
+  }
+  const isr_neto = Math.max(0, isr_bruto - subsidio);
+
+  // ── Neto ──
+  const total_deducciones_obrero = imss_obrero + isr_neto;
+  const neto_trabajador = sbc_mensual - total_deducciones_obrero;
+  const costo_total_empresa = sbc_mensual + imss_patron + infonavit;
+
+  return {
+    sbc_mensual, sbc_diario,
+    imss_obrero, imss_patron, infonavit,
+    isr_bruto, subsidio, isr_neto,
+    total_deducciones_obrero, neto_trabajador, costo_total_empresa,
+    // Desglose IMSS obrero
+    d_emExc_ob:emExc_ob, d_emDin_ob:emDin_ob, d_emPens_ob:emPens_ob, d_iv_ob:iv_ob, d_ceav_ob:ceav_ob,
+    // Desglose IMSS patrón
+    d_emFija_pat:emFija_pat, d_emExc_pat:emExc_pat, d_emDin_pat:emDin_pat, d_rt_pat:rt_pat,
+    d_iv_pat:iv_pat, d_guard_pat:guard_pat, d_retiro_pat:retiro_pat, d_ceav_pat:ceav_pat,
+    d_ceav_pat_pct: ceav_pat_pct * 100,
+  };
+}
+
+function NominaModule() {
+  const [tipo, setTipo] = useState("mensual"); // mensual | diario | honorarios
+  const [salario, setSalario] = useState("");
+  const [dias, setDias] = useState("30");
+  const [primaRiesgo, setPrimaRiesgo] = useState("0.00543");
+  const [resultado, setResultado] = useState(null);
+
+  const fmt = (n) => n.toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+  const calcular = () => {
+    const s = parseFloat(salario);
+    if (!s || s <= 0) return;
+    let sd = s;
+    if (tipo === "mensual") sd = s / 30.4;
+    if (tipo === "honorarios") sd = s / 30.4;
+    const d = parseInt(dias) || 30;
+    const pr = parseFloat(primaRiesgo) || 0.00543;
+    setResultado(calcularNomina(sd, d, pr));
+  };
+
+  const Row = ({ label, obrero, patron, highlight }) => (
+    <tr style={{ background: highlight ? C.navyDim : "transparent" }}>
+      <td style={{ padding:"8px 12px", color:C.text, fontSize:13 }}>{label}</td>
+      <td style={{ padding:"8px 12px", color:C.red, fontSize:13, textAlign:"right", fontWeight:600 }}>{obrero !== undefined ? `$${fmt(obrero)}` : "—"}</td>
+      <td style={{ padding:"8px 12px", color:C.navy, fontSize:13, textAlign:"right", fontWeight:600 }}>{patron !== undefined ? `$${fmt(patron)}` : "—"}</td>
+    </tr>
+  );
+
+  return (
+    <div style={{ padding:28, maxWidth:900, fontFamily:"'Montserrat', sans-serif" }}>
+      <style>{ANIM}</style>
+      <div style={{ marginBottom:28, animation:"fadeUp 0.3s ease" }}>
+        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:22, fontWeight:800 }}>Calculadora de Nómina 2026</h1>
+        <p style={{ margin:0, color:C.muted, fontSize:13 }}>ISR Art. 96 LISR · IMSS · INFONAVIT — Tablas vigentes DOF 28/12/2025</p>
+      </div>
+
+      {/* Inputs */}
+      <Card style={{ marginBottom:20, animation:"fadeUp 0.35s ease" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16, alignItems:"end" }}>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Tipo de trabajador</div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {[["mensual","Salario mensual"],["diario","Salario diario"],["honorarios","Honorarios"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setTipo(v)} style={{ padding:"7px 12px", borderRadius:8, border:`1.5px solid ${tipo===v?C.navy:C.border}`, background:tipo===v?C.navy:"transparent", color:tipo===v?C.white:C.muted, cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s" }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+              {tipo === "diario" ? "Salario diario $" : "Salario mensual $"}
+            </div>
+            <input type="number" value={salario} onChange={e=>setSalario(e.target.value)} placeholder="Ej: 15000"
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+          </div>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Días del período</div>
+            <input type="number" value={dias} onChange={e=>setDias(e.target.value)} placeholder="30"
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+          </div>
+          <div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Prima riesgo trabajo</div>
+            <input type="number" step="0.00001" value={primaRiesgo} onChange={e=>setPrimaRiesgo(e.target.value)} placeholder="0.00543"
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+          </div>
+        </div>
+        <div style={{ marginTop:16 }}>
+          <button onClick={calcular} style={{ background:C.navy, color:C.white, border:"none", borderRadius:10, padding:"12px 32px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:15, transition:"all 0.15s" }}
+            onMouseEnter={e=>e.currentTarget.style.background=C.navyLight} onMouseLeave={e=>e.currentTarget.style.background=C.navy}>
+            Calcular nómina ▶
+          </button>
+          <span style={{ color:C.muted, fontSize:12, marginLeft:16 }}>UMA 2026: ${fmt(UMA_DIARIA_2026)}/día · S.M.: ${fmt(SM_DIARIO_2026)}/día</span>
+        </div>
+      </Card>
+
+      {resultado && (
+        <div style={{ animation:"fadeUp 0.3s ease" }}>
+          {/* Resumen ejecutivo */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:14, marginBottom:20 }}>
+            {[
+              { label:"Salario bruto mensual", value:`$${fmt(resultado.sbc_mensual)}`, color:C.navy, bg:C.navyDim },
+              { label:"Neto al trabajador", value:`$${fmt(resultado.neto_trabajador)}`, color:C.green, bg:C.greenBg },
+              { label:"Costo total empresa", value:`$${fmt(resultado.costo_total_empresa)}`, color:C.red, bg:C.redBg },
+            ].map(c=>(
+              <div key={c.label} style={{ background:c.bg, border:`1.5px solid ${c.color}33`, borderRadius:14, padding:20, textAlign:"center" }}>
+                <div style={{ color:c.color, fontSize:26, fontWeight:800 }}>{c.value}</div>
+                <div style={{ color:c.color, fontSize:12, marginTop:4, fontWeight:500, opacity:0.8 }}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabla detallada */}
+          <Card style={{ padding:0, overflow:"hidden", marginBottom:20 }}>
+            <div style={{ padding:"14px 16px", background:C.navy, color:C.white, fontWeight:700, fontSize:14 }}>
+              📊 Desglose completo
+            </div>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:C.panel }}>
+                  <th style={{ padding:"10px 12px", color:C.muted, fontSize:11, fontWeight:700, textTransform:"uppercase", textAlign:"left", letterSpacing:"0.05em" }}>Concepto</th>
+                  <th style={{ padding:"10px 12px", color:C.red, fontSize:11, fontWeight:700, textTransform:"uppercase", textAlign:"right", letterSpacing:"0.05em" }}>Obrero (deducción)</th>
+                  <th style={{ padding:"10px 12px", color:C.navy, fontSize:11, fontWeight:700, textTransform:"uppercase", textAlign:"right", letterSpacing:"0.05em" }}>Patrón (costo)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background:C.yellowBg }}>
+                  <td colSpan={3} style={{ padding:"6px 12px", color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase" }}>IMSS — Enfermedades y Maternidad</td>
+                </tr>
+                <Row label="Cuota fija (20.40 UMAs)" patron={resultado.d_emFija_pat} />
+                <Row label="Prestaciones en especie excedente 3 UMAs" obrero={resultado.d_emExc_ob} patron={resultado.d_emExc_pat} />
+                <Row label="Prestaciones en dinero" obrero={resultado.d_emDin_ob} patron={resultado.d_emDin_pat} />
+                <Row label="Gastos médicos pensionados" obrero={resultado.d_emPens_ob} patron={resultado.d_emPens_pat} />
+                <tr style={{ background:C.yellowBg }}>
+                  <td colSpan={3} style={{ padding:"6px 12px", color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase" }}>IMSS — Otros seguros</td>
+                </tr>
+                <Row label={`Riesgo de trabajo (prima ${(parseFloat(primaRiesgo)*100).toFixed(3)}%)`} patron={resultado.d_rt_pat} />
+                <Row label="Invalidez y vida" obrero={resultado.d_iv_ob} patron={resultado.d_iv_pat} />
+                <Row label="Guarderías y prestaciones sociales" patron={resultado.d_guard_pat} />
+                <tr style={{ background:C.yellowBg }}>
+                  <td colSpan={3} style={{ padding:"6px 12px", color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase" }}>RCV — Retiro, Cesantía y Vejez (bimestral ÷2)</td>
+                </tr>
+                <Row label="Retiro (2.00%)" patron={resultado.d_retiro_pat} />
+                <Row label={`CEAV patronal (${fmt(resultado.d_ceav_pat_pct)}% — progresivo 2026)`} patron={resultado.d_ceav_pat} />
+                <Row label="CEAV obrero (1.125%)" obrero={resultado.d_ceav_ob} />
+                <tr style={{ background:C.yellowBg }}>
+                  <td colSpan={3} style={{ padding:"6px 12px", color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase" }}>INFONAVIT (bimestral ÷2)</td>
+                </tr>
+                <Row label="Aportación patronal (5%)" patron={resultado.infonavit} />
+                <tr style={{ background:C.navyDim }}>
+                  <td style={{ padding:"10px 12px", color:C.navy, fontWeight:700, fontSize:13 }}>TOTAL IMSS + INFONAVIT</td>
+                  <td style={{ padding:"10px 12px", color:C.red, fontWeight:800, textAlign:"right", fontSize:14 }}>${fmt(resultado.imss_obrero)}</td>
+                  <td style={{ padding:"10px 12px", color:C.navy, fontWeight:800, textAlign:"right", fontSize:14 }}>${fmt(resultado.imss_patron + resultado.infonavit)}</td>
+                </tr>
+                <tr style={{ background:C.yellowBg }}>
+                  <td colSpan={3} style={{ padding:"6px 12px", color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase" }}>ISR — Art. 96 LISR</td>
+                </tr>
+                <Row label="Base gravable (bruto - IMSS obrero)" obrero={resultado.sbc_mensual - resultado.imss_obrero} />
+                <Row label="ISR bruto (tarifa mensual 2026)" obrero={resultado.isr_bruto} />
+                <Row label="Subsidio al empleo" obrero={-resultado.subsidio} />
+                <Row label="ISR neto a retener" obrero={resultado.isr_neto} highlight />
+                <tr style={{ background:C.greenBg }}>
+                  <td style={{ padding:"12px 12px", color:C.green, fontWeight:800, fontSize:14 }}>💰 NETO AL TRABAJADOR</td>
+                  <td colSpan={2} style={{ padding:"12px 12px", color:C.green, fontWeight:800, fontSize:18, textAlign:"right" }}>${fmt(resultado.neto_trabajador)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </Card>
+
+          <div style={{ background:C.navyDim, border:`1px solid ${C.navy}22`, borderRadius:10, padding:"12px 16px", fontSize:12, color:C.muted }}>
+            <strong style={{ color:C.navy }}>Fuentes:</strong> Anexo 8 RMF 2026 (DOF 28/12/2025) · LSS Art. 25, 27, 29, 106 · Reforma pensiones DOF 16/12/2020 · UMA 2026 INEGI $113.14/día · SM 2026 CONASAMI $315.04/día. Los cálculos son referenciales; siempre valida con el SUA oficial del IMSS.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ASISTENTE IA ──────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `Eres el Asistente Contable de COFSA (Consultoría Contable Fiscal y Administrativa), un despacho contable mexicano. Tu nombre es "Asistente COFSA".
 
@@ -1588,6 +1879,7 @@ export default function App() {
     tareas: <TareasModule user={user} initialClient={clientFilter} />,
     chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} />,
+    nomina: <NominaModule />,
     asistente: <AsistenteModule user={user} />,
   };
 
