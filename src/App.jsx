@@ -158,7 +158,15 @@ function SetupBanner() {
     <div style={{ margin:28, background:C.yellowBg, border:`1px solid ${C.yellow}44`, borderRadius:14, padding:24 }}>
       <div style={{ fontWeight:700, fontSize:15, color:C.yellow, marginBottom:10 }}>⚙️ Ejecuta el SQL en Supabase → SQL Editor</div>
       <pre style={{ background:C.navy, borderRadius:10, padding:16, color:"#93C5FD", fontSize:12, lineHeight:1.8, overflowX:"auto" }}>{
-`create table if not exists impuestos (
+`create table if not exists clientes (
+  id uuid default gen_random_uuid() primary key,
+  name text not null unique,
+  created_at timestamptz default now()
+);
+alter table clientes enable row level security;
+create policy "allow all" on clientes for all using (true) with check (true);
+
+create table if not exists impuestos (
   id uuid default gen_random_uuid() primary key,
   client text, tax_type text, month integer, year integer,
   status text default 'pendiente', notes text,
@@ -372,23 +380,28 @@ function Dashboard({ taxes, tasks }) {
 }
 
 // ── IMPUESTOS ──────────────────────────────────────────────────────────────
-function ImpuestosModule({ user }) {
+function ImpuestosModule({ user, initialClient = "", initialStatus = "todos" }) {
   const [taxes, setTaxes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [setupNeeded, setSetupNeeded] = useState(false);
-  const [filter, setFilter] = useState("todos");
-  const [filterClient, setFilterClient] = useState("");
-  const [form, setForm] = useState({ client:CLIENTS[0], tax_type:TAX_TYPES[0], month:1, year:new Date().getFullYear(), status:"pendiente", notes:"" });
+  const [filter, setFilter] = useState(initialStatus);
+  const [filterClient, setFilterClient] = useState(initialClient);
+  const [clients, setClients] = useState([]);
+  const [form, setForm] = useState({ client:"", tax_type:TAX_TYPES[0], month:1, year:new Date().getFullYear(), status:"pendiente", notes:"" });
 
   const load = async () => {
     setLoading(true);
-    const { data, error:err } = await supabase.from("impuestos").select("*").order("created_at",{ascending:false});
+    const [imp, cli] = await Promise.all([
+      supabase.from("impuestos").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+    ]);
     setLoading(false);
-    if (err) { setSetupNeeded(true); return; }
-    setTaxes(data||[]);
+    if (imp.error) { setSetupNeeded(true); return; }
+    setTaxes(imp.data||[]);
+    setClients((cli.data||[]).map(c=>c.name));
   };
 
   useEffect(()=>{ load(); },[]);
@@ -456,7 +469,8 @@ function ImpuestosModule({ user }) {
         <Modal title="Nuevo registro de impuesto" onClose={()=>setShowAdd(false)}>
           <ErrorBanner msg={error} />
           <FieldSelect label="Cliente" value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))}>
-            {CLIENTS.map(c=><option key={c}>{c}</option>)}
+            <option value="">— Seleccionar cliente —</option>
+            {clients.map(c=><option key={c}>{c}</option>)}
           </FieldSelect>
           <FieldSelect label="Tipo de impuesto" value={form.tax_type} onChange={e=>setForm(p=>({...p,tax_type:e.target.value}))}>
             {TAX_TYPES.map(t=><option key={t}>{t}</option>)}
@@ -490,7 +504,7 @@ const COLS = [
   { id:"done", label:"Completado", color:C.green, bg:C.greenBg },
 ];
 
-function TareasModule({ user }) {
+function TareasModule({ user, initialClient = "" }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -499,14 +513,20 @@ function TareasModule({ user }) {
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState("kanban");
   const [notif, setNotif] = useState(null);
-  const [form, setForm] = useState({ title:"", description:"", priority:"media", due_date:"", client:"" });
+  const [clientFilter, setClientFilter] = useState(initialClient);
+  const [clients, setClients] = useState([]);
+  const [form, setForm] = useState({ title:"", description:"", priority:"media", due_date:"", client:initialClient });
 
   const load = async () => {
     setLoading(true);
-    const { data, error:err } = await supabase.from("tareas").select("*").order("created_at",{ascending:false});
+    const [tar, cli] = await Promise.all([
+      supabase.from("tareas").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+    ]);
     setLoading(false);
-    if (err) { setSetupNeeded(true); return; }
-    setTasks(data||[]);
+    if (tar.error) { setSetupNeeded(true); return; }
+    setTasks(tar.data||[]);
+    setClients((cli.data||[]).map(c=>c.name));
   };
 
   useEffect(()=>{ load(); },[]);
@@ -533,6 +553,8 @@ function TareasModule({ user }) {
   const del = async (id) => { await supabase.from("tareas").delete().eq("id",id); load(); };
 
   if (setupNeeded) return <SetupBanner />;
+
+  const filteredTasks = clientFilter ? tasks.filter(t=>t.client===clientFilter) : tasks;
 
   const TaskCard = ({ task }) => {
     const col = COLS.find(c=>c.id===task.status)||COLS[0];
@@ -563,8 +585,11 @@ function TareasModule({ user }) {
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
         <div>
-          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Tareas</h1>
-          <p style={{ margin:0, color:C.muted, fontSize:13 }}>{tasks.length} tareas registradas</p>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800 }}>Tareas</h1>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
+            <p style={{ margin:0, color:C.muted, fontSize:13 }}>{filteredTasks.length} tareas{clientFilter ? ` de ${clientFilter}` : " registradas"}</p>
+            {clientFilter && <button onClick={()=>setClientFilter("")} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>✕ Quitar filtro</button>}
+          </div>
         </div>
         <div style={{ display:"flex", gap:10 }}>
           <div style={{ display:"flex", background:C.surface, borderRadius:9, border:`1.5px solid ${C.border}`, overflow:"hidden" }}>
@@ -581,7 +606,7 @@ function TareasModule({ user }) {
       {loading ? <Spinner /> : view==="kanban" ? (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:14 }}>
           {COLS.map(col=>{
-            const colTasks = tasks.filter(t=>t.status===col.id);
+            const colTasks = filteredTasks.filter(t=>t.status===col.id);
             return (
               <div key={col.id} style={{ background:col.bg, border:`1.5px solid ${col.color}22`, borderRadius:13, padding:14, minHeight:200 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14, paddingBottom:10, borderBottom:`1px solid ${col.color}22` }}>
@@ -595,8 +620,8 @@ function TareasModule({ user }) {
         </div>
       ) : (
         <Card style={{ padding:0, overflow:"hidden" }}>
-          {tasks.length===0 && <div style={{ padding:40, textAlign:"center", color:C.muted }}>Sin tareas — crea la primera ↗</div>}
-          {tasks.map((t,i)=>{
+          {filteredTasks.length===0 && <div style={{ padding:40, textAlign:"center", color:C.muted }}>Sin tareas — crea la primera ↗</div>}
+          {filteredTasks.map((t,i)=>{
             const isOverdue = t.due_date && new Date(t.due_date)<new Date() && t.status!=="done";
             const col = COLS.find(c=>c.id===t.status)||COLS[0];
             return (
@@ -634,7 +659,7 @@ function TareasModule({ user }) {
           </div>
           <FieldSelect label="Cliente relacionado" value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))}>
             <option value="">— Sin cliente —</option>
-            {CLIENTS.map(c=><option key={c}>{c}</option>)}
+            {clients.map(c=><option key={c}>{c}</option>)}
           </FieldSelect>
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
             <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
@@ -760,58 +785,126 @@ function ChatModule({ user }) {
 }
 
 // ── CLIENTES ───────────────────────────────────────────────────────────────
-function ClientesModule() {
+function ClientesModule({ onNavigate }) {
   const [taxes, setTaxes] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
 
-  useEffect(()=>{
-    supabase.from("impuestos").select("*").then(({data})=>setTaxes(data||[]));
-    supabase.from("tareas").select("*").then(({data})=>setTasks(data||[]));
-  },[]);
+  const load = async () => {
+    setLoading(true);
+    const [c, t, k] = await Promise.all([
+      supabase.from("clientes").select("*").order("name"),
+      supabase.from("impuestos").select("*"),
+      supabase.from("tareas").select("*"),
+    ]);
+    setClients(c.data || []);
+    setTaxes(t.data || []);
+    setTasks(k.data || []);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const addClient = async () => {
+    if (!newName.trim()) return;
+    setSaving(true);
+    await supabase.from("clientes").insert([{ name: newName.trim() }]);
+    setSaving(false);
+    setNewName(""); setShowAdd(false);
+    load();
+  };
+
+  const deleteClient = async (id) => {
+    await supabase.from("clientes").delete().eq("id", id);
+    setConfirmDel(null);
+    load();
+  };
 
   return (
     <div style={{ padding:28 }}>
       <style>{ANIM}</style>
-      <div style={{ marginBottom:24, animation:"fadeUp 0.3s ease" }}>
-        <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Clientes</h1>
-        <p style={{ margin:0, color:C.muted, fontSize:13 }}>{CLIENTS.length} clientes registrados</p>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
+        <div>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800 }}>Clientes</h1>
+          <p style={{ margin:0, color:C.muted, fontSize:13 }}>{clients.length} clientes registrados</p>
+        </div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Agregar cliente</Btn>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:16 }}>
-        {CLIENTS.map(client=>{
-          const ctaxes = taxes.filter(t=>t.client===client);
-          const ctasks = tasks.filter(t=>t.client===client);
-          const pending = ctaxes.filter(t=>t.status==="pendiente").length;
-          const presented = ctaxes.filter(t=>t.status==="presentado").length;
-          const isSelected = selected===client;
-          return (
-            <div key={client} className="card" onClick={()=>setSelected(isSelected?null:client)} style={{ background:C.surface, border:`1.5px solid ${isSelected?C.navy:C.border}`, borderRadius:14, padding:22, cursor:"pointer", boxShadow:isSelected?"0 4px 20px rgba(27,42,74,0.12)":"0 1px 4px rgba(0,0,0,0.05)", transition:"all 0.2s" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🏢</div>
-                <div style={{ color:C.navy, fontWeight:700, fontSize:14, lineHeight:1.3 }}>{client}</div>
-              </div>
-              <div style={{ display:"flex", gap:8 }}>
-                {[["Pendientes",pending,C.yellow,C.yellowBg],["Presentados",presented,C.green,C.greenBg],["Tareas",ctasks.length,C.accent,C.navyDim]].map(([lbl,val,color,bg])=>(
-                  <div key={lbl} style={{ flex:1, background:bg, borderRadius:9, padding:"10px 8px", textAlign:"center" }}>
-                    <div style={{ color, fontSize:20, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>{val}</div>
-                    <div style={{ color, fontSize:10, marginTop:2, fontWeight:500, opacity:0.8 }}>{lbl}</div>
-                  </div>
-                ))}
-              </div>
-              {isSelected && ctaxes.length>0 && (
-                <div style={{ marginTop:16, borderTop:`1px solid ${C.border}`, paddingTop:14, animation:"fadeUp 0.2s ease" }}>
-                  {ctaxes.slice(0,4).map((t,i)=>(
-                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:i<3?`1px solid ${C.border}`:"none" }}>
-                      <span style={{ fontSize:12, color:C.muted }}>{t.tax_type} · {MONTHS[(t.month||1)-1]} {t.year}</span>
-                      <StatusBadge status={t.status} />
+
+      {loading ? <Spinner /> : clients.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🏢</div>
+          <div style={{ fontSize:14, fontWeight:500 }}>No hay clientes aún</div>
+          <div style={{ fontSize:12, marginTop:4 }}>Haz clic en "+ Agregar cliente" para comenzar</div>
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:16 }}>
+          {clients.map(client=>{
+            const ctaxes = taxes.filter(t=>t.client===client.name);
+            const ctasks = tasks.filter(t=>t.client===client.name);
+            const pending = ctaxes.filter(t=>t.status==="pendiente").length;
+            const presented = ctaxes.filter(t=>t.status==="presentado").length;
+            return (
+              <div key={client.id} className="card" style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:14, padding:22, boxShadow:"0 1px 4px rgba(0,0,0,0.05)", transition:"all 0.2s" }}>
+                {/* Header */}
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🏢</div>
+                  <div style={{ flex:1, color:C.navy, fontWeight:700, fontSize:14, lineHeight:1.3 }}>{client.name}</div>
+                  <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:16, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
+                </div>
+
+                {/* Stats — clickeables */}
+                <div style={{ display:"flex", gap:8 }}>
+                  {[
+                    { lbl:"Pendientes", val:pending, color:C.yellow, bg:C.yellowBg, module:"impuestos", filter:"pendiente" },
+                    { lbl:"Presentados", val:presented, color:C.green, bg:C.greenBg, module:"impuestos", filter:"presentado" },
+                    { lbl:"Tareas", val:ctasks.length, color:C.accent, bg:C.navyDim, module:"tareas", filter:null },
+                  ].map(({lbl,val,color,bg,module,filter})=>(
+                    <div key={lbl} onClick={()=>onNavigate(module, client.name, filter)}
+                      style={{ flex:1, background:bg, borderRadius:9, padding:"10px 8px", textAlign:"center", cursor:"pointer", transition:"transform 0.15s, box-shadow 0.15s" }}
+                      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 4px 12px ${color}33`}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
+                      <div style={{ color, fontSize:20, fontWeight:800 }}>{val}</div>
+                      <div style={{ color, fontSize:10, marginTop:2, fontWeight:600, opacity:0.85 }}>{lbl}</div>
+                      <div style={{ color, fontSize:9, marginTop:1, opacity:0.5 }}>ver →</div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal agregar cliente */}
+      {showAdd && (
+        <Modal title="Agregar nuevo cliente" onClose={()=>setShowAdd(false)} width={420}>
+          <Input label="Nombre del cliente *" value={newName} onChange={e=>setNewName(e.target.value)}
+            placeholder="Ej: Grupo Regio S.A." onKeyDown={e=>e.key==="Enter"&&addClient()} />
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
+            <Btn onClick={addClient} loading={saving} disabled={!newName.trim()}>Agregar cliente</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal confirmar eliminar */}
+      {confirmDel && (
+        <Modal title="Eliminar cliente" onClose={()=>setConfirmDel(null)} width={420}>
+          <p style={{ color:C.text, fontSize:14, marginBottom:20 }}>
+            ¿Estás seguro que deseas eliminar a <strong>{confirmDel.name}</strong>? Esta acción no se puede deshacer.
+          </p>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn variant="ghost" onClick={()=>setConfirmDel(null)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={()=>deleteClient(confirmDel.id)}>Sí, eliminar</Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -821,6 +914,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
   const [activeModule, setActiveModule] = useState("dashboard");
+  const [clientFilter, setClientFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
   const [taxes, setTaxes] = useState([]);
   const [tasks, setTasks] = useState([]);
 
@@ -835,6 +930,19 @@ export default function App() {
     supabase.from("impuestos").select("*").then(({data})=>setTaxes(data||[]));
     supabase.from("tareas").select("*").then(({data})=>setTasks(data||[]));
   },[user]);
+
+  // Navigate from Clientes to a module with pre-applied filters
+  const handleNavigate = (module, client, filter) => {
+    setClientFilter(client);
+    setStatusFilter(filter || "todos");
+    setActiveModule(module);
+  };
+
+  const handleNav = (module) => {
+    setClientFilter("");
+    setStatusFilter("todos");
+    setActiveModule(module);
+  };
 
   if (checking) return (
     <div style={{ minHeight:"100vh", background:C.navy, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -852,16 +960,16 @@ export default function App() {
 
   const modules = {
     dashboard: <Dashboard taxes={taxes} tasks={tasks} user={user} />,
-    impuestos: <ImpuestosModule user={user} />,
-    tareas: <TareasModule user={user} />,
+    impuestos: <ImpuestosModule user={user} initialClient={clientFilter} initialStatus={statusFilter} />,
+    tareas: <TareasModule user={user} initialClient={clientFilter} />,
     chat: <ChatModule user={user} />,
-    clientes: <ClientesModule />,
+    clientes: <ClientesModule onNavigate={handleNavigate} />,
   };
 
   return (
     <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Montserrat', sans-serif" }}>
       <style>{ANIM}</style>
-      <Sidebar active={activeModule} onNav={setActiveModule} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} />
+      <Sidebar active={activeModule} onNav={handleNav} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} />
       <main style={{ flex:1, overflowY:activeModule==="chat"?"hidden":"auto" }}>
         {modules[activeModule]}
       </main>
