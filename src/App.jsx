@@ -507,6 +507,7 @@ const COLS = [
 
 function TareasModule({ user, initialClient = "" }) {
   const [tasks, setTasks] = useState([]);
+  const [perfiles, setPerfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [setupNeeded, setSetupNeeded] = useState(false);
@@ -515,19 +516,25 @@ function TareasModule({ user, initialClient = "" }) {
   const [view, setView] = useState("kanban");
   const [notif, setNotif] = useState(null);
   const [clientFilter, setClientFilter] = useState(initialClient);
+  const [userFilter, setUserFilter] = useState(null); // null = todos
   const [clients, setClients] = useState([]);
-  const [form, setForm] = useState({ title:"", description:"", priority:"media", due_date:"", client:initialClient });
+  const [form, setForm] = useState({ title:"", description:"", priority:"media", due_date:"", client:initialClient, assigned_to:user.id });
+
+  const COLORS = ["#2E4A8C","#16A34A","#D97706","#DC2626","#7C3AED","#0891B2"];
+  const colorForUser = (id) => COLORS[(id?.charCodeAt(0)||0) % COLORS.length];
 
   const load = async () => {
     setLoading(true);
-    const [tar, cli] = await Promise.all([
+    const [tar, cli, per] = await Promise.all([
       supabase.from("tareas").select("*").order("created_at",{ascending:false}),
       supabase.from("clientes").select("*").order("name"),
+      supabase.from("perfiles").select("*").order("nombre"),
     ]);
     setLoading(false);
     if (tar.error) { setSetupNeeded(true); return; }
     setTasks(tar.data||[]);
     setClients((cli.data||[]).map(c=>c.name));
+    setPerfiles(per.data||[]);
   };
 
   useEffect(()=>{ load(); },[]);
@@ -540,12 +547,12 @@ function TareasModule({ user, initialClient = "" }) {
   const save = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
-    const { error:err } = await supabase.from("tareas").insert([{...form, assigned_to:user.id, status:"todo", created_by:user.id}]);
+    const { error:err } = await supabase.from("tareas").insert([{...form, status:"todo", created_by:user.id}]);
     setSaving(false);
     if (err) { setError(err.message); return; }
     setShowAdd(false);
-    setForm({ title:"", description:"", priority:"media", due_date:"", client:"" });
-    setNotif("✅ Tarea creada correctamente");
+    setForm({ title:"", description:"", priority:"media", due_date:"", client:"", assigned_to:user.id });
+    setNotif("✅ Tarea creada y asignada correctamente");
     setTimeout(()=>setNotif(null), 3500);
     load();
   };
@@ -555,16 +562,29 @@ function TareasModule({ user, initialClient = "" }) {
 
   if (setupNeeded) return <SetupBanner />;
 
-  const filteredTasks = clientFilter ? tasks.filter(t=>t.client===clientFilter) : tasks;
+  // Aplicar filtros
+  let filteredTasks = tasks;
+  if (clientFilter) filteredTasks = filteredTasks.filter(t=>t.client===clientFilter);
+  if (userFilter) filteredTasks = filteredTasks.filter(t=>t.assigned_to===userFilter);
+
+  const getPerfil = (id) => perfiles.find(p=>p.id===id);
 
   const TaskCard = ({ task }) => {
     const col = COLS.find(c=>c.id===task.status)||COLS[0];
     const isOverdue = task.due_date && new Date(task.due_date)<new Date() && task.status!=="done";
+    const perfil = getPerfil(task.assigned_to);
+    const initials = perfil ? perfil.nombre.substring(0,2).toUpperCase() : "??";
+    const color = colorForUser(task.assigned_to);
     return (
-      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:11, padding:14, marginBottom:9, borderLeft:`3px solid ${isOverdue?C.red:col.color}`, boxShadow:"0 1px 3px rgba(0,0,0,0.04)", transition:"box-shadow 0.15s" }}>
-        <div style={{ color:C.text, fontSize:13, fontWeight:600, marginBottom:6, lineHeight:1.4 }}>{task.title}</div>
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:11, padding:14, marginBottom:9, borderLeft:`3px solid ${isOverdue?C.red:col.color}`, boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+          <div style={{ color:C.text, fontSize:13, fontWeight:600, lineHeight:1.4, flex:1 }}>{task.title}</div>
+          {/* Avatar del responsable */}
+          <div title={perfil?.nombre||"Sin asignar"} style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color, flexShrink:0, marginLeft:8 }}>{initials}</div>
+        </div>
         {task.description && <div style={{ color:C.muted, fontSize:12, marginBottom:8, lineHeight:1.5 }}>{task.description}</div>}
-        {task.client && <div style={{ color:C.muted, fontSize:11, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>👥 {task.client}</div>}
+        {task.client && <div style={{ color:C.muted, fontSize:11, marginBottom:8 }}>👥 {task.client}</div>}
+        {perfil && <div style={{ color, fontSize:11, marginBottom:8, fontWeight:600 }}>👤 {perfil.nombre}</div>}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <PriorityBadge priority={task.priority} />
           {task.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, fontWeight:isOverdue?600:400 }}>{isOverdue?"⚠️ ":"📅 "}{task.due_date}</span>}
@@ -584,12 +604,13 @@ function TareasModule({ user, initialClient = "" }) {
       <style>{ANIM}</style>
       {notif && <div style={{ position:"fixed", top:20, right:20, zIndex:2000, background:C.navy, borderRadius:12, padding:"14px 20px", color:C.white, fontSize:14, fontWeight:600, boxShadow:"0 8px 32px rgba(27,42,74,0.3)", animation:"slideIn 0.3s ease" }}>{notif}</div>}
 
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, animation:"fadeUp 0.3s ease" }}>
         <div>
           <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800 }}>Tareas</h1>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
-            <p style={{ margin:0, color:C.muted, fontSize:13 }}>{filteredTasks.length} tareas{clientFilter ? ` de ${clientFilter}` : " registradas"}</p>
-            {clientFilter && <button onClick={()=>setClientFilter("")} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>✕ Quitar filtro</button>}
+            <p style={{ margin:0, color:C.muted, fontSize:13 }}>{filteredTasks.length} tareas{clientFilter?` · ${clientFilter}`:""}{ userFilter?` · ${getPerfil(userFilter)?.nombre||""}`:""}</p>
+            {(clientFilter||userFilter) && <button onClick={()=>{setClientFilter("");setUserFilter(null);}} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>✕ Quitar filtros</button>}
           </div>
         </div>
         <div style={{ display:"flex", gap:10 }}>
@@ -601,6 +622,43 @@ function TareasModule({ user, initialClient = "" }) {
           <Btn onClick={()=>setShowAdd(true)}>+ Nueva tarea</Btn>
         </div>
       </div>
+
+      {/* Filtro por colaborador */}
+      {perfiles.length > 0 && (
+        <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+          <span style={{ color:C.muted, fontSize:12, fontWeight:600 }}>Filtrar por:</span>
+          {/* Botón "Todos" */}
+          <button onClick={()=>setUserFilter(null)} style={{
+            display:"flex", alignItems:"center", gap:7, padding:"6px 14px",
+            borderRadius:20, border:`1.5px solid ${!userFilter?C.navy:C.border}`,
+            background:!userFilter?C.navy:"transparent",
+            color:!userFilter?C.white:C.muted,
+            cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+          }}>
+            <span style={{ fontSize:14 }}>👥</span> Todos ({tasks.length})
+          </button>
+          {/* Avatar por colaborador */}
+          {perfiles.map(p=>{
+            const count = tasks.filter(t=>t.assigned_to===p.id).length;
+            const color = colorForUser(p.id);
+            const isActive = userFilter===p.id;
+            return (
+              <button key={p.id} onClick={()=>setUserFilter(isActive?null:p.id)} style={{
+                display:"flex", alignItems:"center", gap:8, padding:"6px 14px 6px 8px",
+                borderRadius:20, border:`1.5px solid ${isActive?color:C.border}`,
+                background:isActive?color+"22":"transparent",
+                color:isActive?color:C.muted,
+                cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+              }}>
+                <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>
+                  {p.nombre.substring(0,2).toUpperCase()}
+                </div>
+                {p.nombre} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <ErrorBanner msg={error} />
 
@@ -625,13 +683,21 @@ function TareasModule({ user, initialClient = "" }) {
           {filteredTasks.map((t,i)=>{
             const isOverdue = t.due_date && new Date(t.due_date)<new Date() && t.status!=="done";
             const col = COLS.find(c=>c.id===t.status)||COLS[0];
+            const perfil = getPerfil(t.assigned_to);
+            const color = colorForUser(t.assigned_to);
             return (
-              <div key={t.id} className="row-hover" style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:i<tasks.length-1?`1px solid ${C.border}`:"none" }}>
+              <div key={t.id} className="row-hover" style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:i<filteredTasks.length-1?`1px solid ${C.border}`:"none" }}>
                 <div style={{ width:3, height:40, borderRadius:2, background:col.color, flexShrink:0 }} />
                 <div style={{ flex:1 }}>
                   <div style={{ color:C.text, fontSize:13, fontWeight:600 }}>{t.title}</div>
                   {t.client && <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{t.client}</div>}
                 </div>
+                {perfil && (
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>{perfil.nombre.substring(0,2).toUpperCase()}</div>
+                    <span style={{ fontSize:12, color, fontWeight:600 }}>{perfil.nombre}</span>
+                  </div>
+                )}
                 <Badge label={col.label} color={col.color} bg={col.bg} />
                 <PriorityBadge priority={t.priority} />
                 {t.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, whiteSpace:"nowrap" }}>{isOverdue?"⚠️ ":""}{t.due_date}</span>}
@@ -649,6 +715,28 @@ function TareasModule({ user, initialClient = "" }) {
             <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Descripción</div>
             <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={3}
               style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"vertical", boxSizing:"border-box" }} />
+          </div>
+          {/* Asignar a colaborador */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:8, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Asignar a</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {perfiles.map(p=>{
+                const color = colorForUser(p.id);
+                const isSelected = form.assigned_to===p.id;
+                return (
+                  <button key={p.id} onClick={()=>setForm(prev=>({...prev,assigned_to:p.id}))} style={{
+                    display:"flex", alignItems:"center", gap:8, padding:"7px 14px 7px 8px",
+                    borderRadius:20, border:`1.5px solid ${isSelected?color:C.border}`,
+                    background:isSelected?color+"22":C.panel,
+                    color:isSelected?color:C.muted,
+                    cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+                  }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>{p.nombre.substring(0,2).toUpperCase()}</div>
+                    {p.nombre}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             <FieldSelect label="Prioridad" value={form.priority} onChange={e=>setForm(p=>({...p,priority:e.target.value}))}>
