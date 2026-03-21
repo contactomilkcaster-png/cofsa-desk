@@ -1600,41 +1600,45 @@ function NominaModule() {
       y += 22;
 
       // Tabla desglose
-      const cols = [100, 46, 46];
+      // Columnas: concepto=110mm, obrero=38mm, patron=32mm (total=180mm = W-M*2)
+      const TW = W - M * 2; // 180
+      const C1 = 110, C2 = 38, C3 = 32;
+      const xOb = M + C1 + C2;   // fin columna obrero
+      const xPat = M + C1 + C2 + C3; // fin columna patron
       const headerH = 7;
       doc.setFillColor(27,42,74);
-      doc.rect(M, y, W - M*2, headerH, "F");
+      doc.rect(M, y, TW, headerH, "F");
       doc.setTextColor(255,255,255);
       doc.setFontSize(8);
       doc.setFont("helvetica","bold");
       doc.text("CONCEPTO", M + 3, y + 5);
-      doc.text("OBRERO", M + cols[0] + cols[1]/2, y + 5, { align:"center" });
-      doc.text("PATRÓN", M + cols[0] + cols[1] + cols[2]/2, y + 5, { align:"center" });
+      doc.text("OBRERO", xOb - 3, y + 5, { align:"right" });
+      doc.text("PATRON", xPat - 3, y + 5, { align:"right" });
       y += headerH;
 
       const filas = [
-        { tipo:"section", label:"IMSS — ENFERMEDADES Y MATERNIDAD" },
+        { tipo:"section", label:"IMSS - ENFERMEDADES Y MATERNIDAD" },
         { label:"Cuota fija (20.40 UMAs)", pat:resultado.d_emFija_pat },
         { label:"Prest. en especie excedente 3 UMAs", ob:resultado.d_emExc_ob, pat:resultado.d_emExc_pat },
         { label:"Prestaciones en dinero", ob:resultado.d_emDin_ob, pat:resultado.d_emDin_pat },
-        { label:"Gastos médicos pensionados", ob:resultado.d_emPens_ob, pat:resultado.d_emPens_pat },
-        { tipo:"section", label:"IMSS — OTROS SEGUROS" },
+        { label:"Gastos medicos pensionados", ob:resultado.d_emPens_ob, pat:resultado.d_emPens_pat },
+        { tipo:"section", label:"IMSS - OTROS SEGUROS" },
         { label:`Riesgo de trabajo (${(parseFloat(primaRiesgo)*100).toFixed(3)}%)`, pat:resultado.d_rt_pat },
         { label:"Invalidez y vida", ob:resultado.d_iv_ob, pat:resultado.d_iv_pat },
-        { label:"Guarderías y prestaciones sociales", pat:resultado.d_guard_pat },
-        { tipo:"section", label:"RCV — RETIRO, CESANTÍA Y VEJEZ (BIMESTRAL ÷2)" },
+        { label:"Guarderias y prestaciones sociales", pat:resultado.d_guard_pat },
+        { tipo:"section", label:"RCV - RETIRO, CESANTIA Y VEJEZ (BIMESTRAL / 2)" },
         { label:"Retiro (2.00%)", pat:resultado.d_retiro_pat },
-        { label:`CEAV patronal (${fmt(resultado.d_ceav_pat_pct)}% progresivo)`, pat:resultado.d_ceav_pat },
+        { label:`CEAV patronal (${fmt(resultado.d_ceav_pat_pct)}% progresivo 2026)`, pat:resultado.d_ceav_pat },
         { label:"CEAV obrero (1.125%)", ob:resultado.d_ceav_ob },
-        { tipo:"section", label:"INFONAVIT (BIMESTRAL ÷2)" },
-        { label:"Aportación patronal (5%)", pat:resultado.infonavit },
+        { tipo:"section", label:"INFONAVIT (BIMESTRAL / 2)" },
+        { label:"Aportacion patronal (5%)", pat:resultado.infonavit },
         { tipo:"total", label:"TOTAL IMSS + INFONAVIT", ob:resultado.imss_obrero, pat:resultado.imss_patron + resultado.infonavit },
-        { tipo:"section", label:"ISR — ART. 96 LISR" },
+        { tipo:"section", label:"ISR - ART. 96 LISR" },
         { label:"Base gravable (bruto - IMSS obrero)", ob:resultado.sbc_mensual - resultado.imss_obrero },
         { label:"ISR bruto (tarifa mensual 2026)", ob:resultado.isr_bruto },
         { label:"Subsidio al empleo", ob:-resultado.subsidio },
         { tipo:"highlight", label:"ISR NETO A RETENER", ob:resultado.isr_neto },
-        { tipo:"neto", label:"💰 NETO AL TRABAJADOR", val:resultado.neto_trabajador },
+        { tipo:"neto", label:"NETO AL TRABAJADOR", val:resultado.neto_trabajador },
       ];
 
       const fila_h = 6;
@@ -1642,43 +1646,56 @@ function NominaModule() {
         if (y > 250) { doc.addPage(); y = 20; }
         if (f.tipo === "section") {
           doc.setFillColor(255, 251, 235);
-          doc.rect(M, y, W - M*2, fila_h, "F");
-          doc.setTextColor(217, 119, 6);
+          doc.rect(M, y, TW, fila_h, "F");
+          doc.setTextColor(180, 100, 0);
           doc.setFontSize(7);
           doc.setFont("helvetica","bold");
           doc.text(f.label, M + 3, y + 4);
-        } else if (f.tipo === "total" || f.tipo === "highlight") {
-          doc.setFillColor(238, 242, 251);
-          doc.rect(M, y, W - M*2, fila_h, "F");
+        } else if (f.tipo === "total") {
+          doc.setFillColor(220, 228, 250);
+          doc.rect(M, y, TW, fila_h, "F");
           doc.setFont("helvetica","bold");
           doc.setFontSize(8);
           doc.setTextColor(27,42,74);
           doc.text(f.label, M + 3, y + 4);
-          if (f.ob !== undefined) { doc.setTextColor(220,38,38); doc.text(`$${fmt(f.ob)}`, M + cols[0] + cols[1] - 3, y + 4, { align:"right" }); }
-          if (f.pat !== undefined) { doc.setTextColor(27,42,74); doc.text(`$${fmt(f.pat)}`, M + cols[0] + cols[1] + cols[2] - 3, y + 4, { align:"right" }); }
+          if (f.ob !== undefined) { doc.setTextColor(180,30,30); doc.text(`$${fmt(f.ob)}`, xOb - 3, y + 4, { align:"right" }); }
+          if (f.pat !== undefined) { doc.setTextColor(27,42,74); doc.text(`$${fmt(f.pat)}`, xPat - 3, y + 4, { align:"right" }); }
+        } else if (f.tipo === "highlight") {
+          doc.setFillColor(235, 240, 255);
+          doc.rect(M, y, TW, fila_h, "F");
+          doc.setFont("helvetica","bold");
+          doc.setFontSize(8);
+          doc.setTextColor(27,42,74);
+          doc.text(f.label, M + 3, y + 4);
+          if (f.ob !== undefined) { doc.setTextColor(180,30,30); doc.text(`$${fmt(f.ob)}`, xOb - 3, y + 4, { align:"right" }); }
         } else if (f.tipo === "neto") {
-          doc.setFillColor(240, 253, 244);
-          doc.rect(M, y, W - M*2, fila_h + 2, "F");
+          doc.setFillColor(220, 252, 231);
+          doc.rect(M, y, TW, fila_h + 2, "F");
           doc.setFont("helvetica","bold");
           doc.setFontSize(10);
-          doc.setTextColor(22,163,74);
+          doc.setTextColor(20,130,60);
           doc.text(f.label, M + 3, y + 5);
-          doc.text(`$${fmt(f.val)}`, W - M - 3, y + 5, { align:"right" });
+          doc.text(`$${fmt(f.val)}`, xPat - 3, y + 5, { align:"right" });
           y += 2;
         } else {
-          doc.setFillColor(idx % 2 === 0 ? 249:255, idx % 2 === 0 ? 250:255, idx % 2 === 0 ? 252:255);
-          doc.rect(M, y, W - M*2, fila_h, "F");
+          doc.setFillColor(idx % 2 === 0 ? 248:255, idx % 2 === 0 ? 249:255, idx % 2 === 0 ? 252:255);
+          doc.rect(M, y, TW, fila_h, "F");
           doc.setFont("helvetica","normal");
           doc.setFontSize(7.5);
           doc.setTextColor(30,41,59);
           doc.text(f.label, M + 3, y + 4);
-          if (f.ob !== undefined) { doc.setTextColor(220,38,38); doc.text(f.ob < 0 ? `-$${fmt(Math.abs(f.ob))}` : `$${fmt(f.ob)}`, M + cols[0] + cols[1] - 3, y + 4, { align:"right" }); }
-          if (f.pat !== undefined) { doc.setTextColor(27,42,74); doc.text(`$${fmt(f.pat)}`, M + cols[0] + cols[1] + cols[2] - 3, y + 4, { align:"right" }); }
+          if (f.ob !== undefined) {
+            doc.setTextColor(180,30,30);
+            doc.text(f.ob < 0 ? `-$${fmt(Math.abs(f.ob))}` : `$${fmt(f.ob)}`, xOb - 3, y + 4, { align:"right" });
+          }
+          if (f.pat !== undefined) {
+            doc.setTextColor(27,42,74);
+            doc.text(`$${fmt(f.pat)}`, xPat - 3, y + 4, { align:"right" });
+          }
         }
-        // Borde fila
-        doc.setDrawColor(226,232,240);
+        doc.setDrawColor(210,218,232);
         doc.setLineWidth(0.1);
-        doc.rect(M, y, W - M*2, f.tipo === "neto" ? fila_h+2 : fila_h, "S");
+        doc.rect(M, y, TW, f.tipo === "neto" ? fila_h+2 : fila_h, "S");
         y += f.tipo === "neto" ? fila_h + 2 : fila_h;
       });
 
