@@ -252,7 +252,7 @@ const NAV = [
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
-  { id:"nomina", icon:"💵", label:"Nómina" },
+  { id:"nomina", icon:"🧮", label:"Cálculos" },
   { id:"asistente", icon:"🤖", label:"Asistente IA" },
 ];
 
@@ -1906,6 +1906,459 @@ function NominaModule() {
   );
 }
 
+// ── CÁLCULOS LABORALES ────────────────────────────────────────────────────
+
+// ── Vacaciones LFT 2026 ──
+const TABLA_VACACIONES = [
+  { anios:1,  dias:12 }, { anios:2,  dias:14 }, { anios:3,  dias:16 },
+  { anios:4,  dias:18 }, { anios:5,  dias:20 }, { anios:6,  dias:22 },
+  { anios:7,  dias:24 }, { anios:8,  dias:26 }, { anios:9,  dias:28 },
+  { anios:10, dias:30 }, { anios:11, dias:32 }, { anios:12, dias:34 },
+  { anios:13, dias:36 }, { anios:14, dias:38 }, { anios:15, dias:40 },
+];
+function diasVacaciones(anios) {
+  if (anios < 1) return 0;
+  const found = TABLA_VACACIONES.slice().reverse().find(t => anios >= t.anios);
+  return found ? found.dias + Math.floor((anios - found.anios) / 5) * 2 : 12;
+}
+
+function CalcVacaciones() {
+  const [sd, setSd] = useState("");
+  const [fi, setFi] = useState("");
+  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular = () => {
+    const salDiario = parseFloat(sd);
+    if (!salDiario || !fi) return;
+    const inicio = new Date(fi), fin = new Date(ff);
+    const dias_trabajados = Math.floor((fin - inicio) / (1000*60*60*24));
+    const anios = dias_trabajados / 365;
+    const anios_completos = Math.floor(anios);
+    const dias_vac = diasVacaciones(anios_completos);
+    // Vacaciones proporcionales al año en curso
+    const dias_anio_actual = dias_trabajados - anios_completos * 365;
+    const vac_proporcionales = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
+    const prima = dias_vac * salDiario * 0.25;
+    const prima_prop = vac_proporcionales * salDiario * 0.25;
+    setR({ anios: anios.toFixed(2), anios_completos, dias_vac, vac_proporcionales, prima, prima_prop, salDiario });
+  };
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:20 }}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
+        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
+      </div>
+      <Btn onClick={calcular}>Calcular vacaciones ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+          {[
+            { l:"Antigüedad", v:`${r.anios} años`, c:C.navy, bg:C.navyDim },
+            { l:"Días de vacaciones (año completo)", v:`${r.dias_vac} días`, c:C.accent, bg:C.navyDim },
+            { l:"Prima vacacional (25%)", v:`$${fmt(r.prima)}`, c:C.green, bg:C.greenBg },
+            { l:"Vac. proporcionales (año en curso)", v:`${r.vac_proporcionales} días`, c:C.yellow, bg:C.yellowBg },
+            { l:"Prima proporcional", v:`$${fmt(r.prima_prop)}`, c:C.yellow, bg:C.yellowBg },
+            { l:"Salario diario base", v:`$${fmt(r.salDiario)}`, c:C.muted, bg:C.panel },
+          ].map(x=>(
+            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
+              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
+              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalcAguinaldo() {
+  const [sd, setSd] = useState("");
+  const [fi, setFi] = useState("");
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular = () => {
+    const salDiario = parseFloat(sd);
+    if (!salDiario || !fi) return;
+    const inicio = new Date(fi);
+    const diciembre = new Date(new Date().getFullYear(), 11, 20); // 20 de diciembre
+    const dias_trabajados = Math.floor((diciembre - inicio) / (1000*60*60*24));
+    const dias_anio = Math.min(dias_trabajados, 365);
+    // LFT: mínimo 15 días de aguinaldo
+    const dias_aguinaldo_completo = 15;
+    const aguinaldo_prop = (dias_anio / 365) * dias_aguinaldo_completo * salDiario;
+    const aguinaldo_completo = dias_aguinaldo_completo * salDiario;
+    setR({ dias_anio, aguinaldo_prop, aguinaldo_completo, salDiario, dias_aguinaldo_completo });
+  };
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
+      </div>
+      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
+        Art. 87 LFT — Mínimo 15 días de salario. Cálculo al 20 de diciembre del año en curso.
+      </div>
+      <Btn onClick={calcular}>Calcular aguinaldo ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+          {[
+            { l:"Días trabajados en el año", v:`${r.dias_anio} días`, c:C.navy, bg:C.navyDim },
+            { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo_prop)}`, c:C.green, bg:C.greenBg },
+            { l:"Aguinaldo año completo", v:`$${fmt(r.aguinaldo_completo)}`, c:C.accent, bg:C.navyDim },
+          ].map(x=>(
+            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
+              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
+              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalcFiniquito() {
+  const [sd, setSd] = useState("");
+  const [fi, setFi] = useState("");
+  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular = () => {
+    const salDiario = parseFloat(sd);
+    if (!salDiario || !fi) return;
+    const inicio = new Date(fi), fin = new Date(ff);
+    const dias_total = Math.floor((fin - inicio) / (1000*60*60*24));
+    const anios = dias_total / 365;
+    const anios_completos = Math.floor(anios);
+
+    // Días trabajados en el año en curso
+    const dias_anio_actual = dias_total - anios_completos * 365;
+
+    // Partes proporcionales
+    const dias_vac = diasVacaciones(anios_completos);
+    const vac_prop = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
+    const prima_vac = vac_prop * salDiario * 0.25;
+    const aguinaldo = (dias_anio_actual / 365) * 15 * salDiario;
+    const salarios_pendientes = dias_anio_actual % 30 === 0 ? 0 : (dias_anio_actual % 30) * salDiario;
+    // Prima de antigüedad (12 días por año, máx 2 UMAs diarias)
+    const uma2 = UMA_DIARIA_2026 * 2;
+    const base_prima_ant = Math.min(salDiario, uma2);
+    const prima_antiguedad = anios_completos >= 15 ? anios_completos * 12 * base_prima_ant : 0;
+
+    const total = vac_prop * salDiario + prima_vac + aguinaldo + salarios_pendientes + prima_antiguedad;
+
+    setR({ anios: anios.toFixed(2), vac_prop, prima_vac, aguinaldo, salarios_pendientes, prima_antiguedad, total, dias_anio_actual });
+  };
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:20 }}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
+        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
+      </div>
+      <Btn onClick={calcular}>Calcular finiquito ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:14 }}>
+            {[
+              { l:"Vacaciones proporcionales", v:`$${fmt(r.vac_prop * parseFloat(sd))}`, c:C.accent, bg:C.navyDim },
+              { l:"Prima vacacional (25%)", v:`$${fmt(r.prima_vac)}`, c:C.accent, bg:C.navyDim },
+              { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo)}`, c:C.yellow, bg:C.yellowBg },
+              { l:"Salarios pendientes", v:`$${fmt(r.salarios_pendientes)}`, c:C.navy, bg:C.navyDim },
+              { l:"Prima antigüedad (15+ años)", v:`$${fmt(r.prima_antiguedad)}`, c:C.muted, bg:C.panel },
+              { l:"TOTAL FINIQUITO", v:`$${fmt(r.total)}`, c:C.green, bg:C.greenBg },
+            ].map(x=>(
+              <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
+                <div style={{ color:x.c, fontSize:x.l==="TOTAL FINIQUITO"?22:18, fontWeight:800 }}>{x.v}</div>
+                <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalcLiquidacion() {
+  const [sd, setSd] = useState("");
+  const [fi, setFi] = useState("");
+  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
+  const [tipo, setTipo] = useState("injustificado");
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular = () => {
+    const salDiario = parseFloat(sd);
+    if (!salDiario || !fi) return;
+    const inicio = new Date(fi), fin = new Date(ff);
+    const dias_total = Math.floor((fin - inicio) / (1000*60*60*24));
+    const anios = dias_total / 365;
+    const anios_completos = Math.floor(anios);
+    const dias_anio_actual = dias_total - anios_completos * 365;
+
+    // Partes del finiquito
+    const vac_prop = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
+    const prima_vac = vac_prop * salDiario * 0.25;
+    const aguinaldo = (dias_anio_actual / 365) * 15 * salDiario;
+    const uma2 = UMA_DIARIA_2026 * 2;
+    const base_prima = Math.min(salDiario, uma2);
+    const prima_antiguedad = anios_completos * 12 * base_prima;
+
+    // Indemnización constitucional (solo despido injustificado)
+    const tres_meses = 90 * salDiario;
+    const veinte_dias = anios_completos * 20 * salDiario;
+    const indemnizacion = tipo === "injustificado" ? tres_meses + veinte_dias : 0;
+
+    const finiquito = vac_prop * salDiario + prima_vac + aguinaldo;
+    const total = finiquito + prima_antiguedad + indemnizacion;
+
+    setR({ anios: anios.toFixed(2), vac_prop, prima_vac, aguinaldo, prima_antiguedad, tres_meses, veinte_dias, indemnizacion, finiquito, total });
+  };
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:16 }}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
+        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
+      </div>
+      <div style={{ marginBottom:16 }}>
+        <div style={{ color:C.muted, fontSize:11, marginBottom:8, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Tipo de separación</div>
+        <div style={{ display:"flex", gap:8 }}>
+          {[["injustificado","Despido injustificado (Art. 48 LFT)"],["justificado","Despido justificado"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setTipo(v)} style={{ padding:"9px 18px", borderRadius:9, border:`1.5px solid ${tipo===v?C.navy:C.border}`, background:tipo===v?C.navy:"transparent", color:tipo===v?C.white:C.muted, cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13, transition:"all 0.15s" }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <Btn onClick={calcular}>Calcular liquidación ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:12 }}>
+            {[
+              { l:"Vacaciones proporcionales", v:`$${fmt(r.vac_prop * parseFloat(sd))}`, c:C.accent, bg:C.navyDim },
+              { l:"Prima vacacional", v:`$${fmt(r.prima_vac)}`, c:C.accent, bg:C.navyDim },
+              { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo)}`, c:C.yellow, bg:C.yellowBg },
+              { l:"Prima de antigüedad (12 días/año)", v:`$${fmt(r.prima_antiguedad)}`, c:C.navy, bg:C.navyDim },
+              ...(tipo==="injustificado" ? [
+                { l:"3 meses (Art. 50 LFT)", v:`$${fmt(r.tres_meses)}`, c:C.red, bg:C.redBg },
+                { l:"20 días por año (Art. 50 LFT)", v:`$${fmt(r.veinte_dias)}`, c:C.red, bg:C.redBg },
+              ] : []),
+              { l:"TOTAL LIQUIDACIÓN", v:`$${fmt(r.total)}`, c:C.green, bg:C.greenBg },
+            ].map(x=>(
+              <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
+                <div style={{ color:x.c, fontSize:x.l.includes("TOTAL")?20:17, fontWeight:800 }}>{x.v}</div>
+                <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalcPTU() {
+  const [utilidad, setUtilidad] = useState("");
+  const [empleados, setEmpleados] = useState([{ nombre:"", diasTrabajados:"365", salarioDiario:"" }]);
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const addEmpleado = () => setEmpleados(p=>[...p, { nombre:"", diasTrabajados:"365", salarioDiario:"" }]);
+  const updEmpleado = (i, f, v) => setEmpleados(p=>p.map((e,idx)=>idx===i?{...e,[f]:v}:e));
+  const delEmpleado = (i) => setEmpleados(p=>p.filter((_,idx)=>idx!==i));
+
+  const calcular = () => {
+    const util = parseFloat(utilidad);
+    if (!util) return;
+    const mitad = util / 2; // 50% por días trabajados, 50% por salarios
+    const validos = empleados.filter(e => e.salarioDiario && e.diasTrabajados);
+    if (!validos.length) return;
+
+    const totalDias = validos.reduce((s,e)=>s+parseInt(e.diasTrabajados),0);
+    const totalSalarios = validos.reduce((s,e)=>s+parseFloat(e.salarioDiario)*parseInt(e.diasTrabajados),0);
+
+    const resultados = validos.map(e=>{
+      const dias = parseInt(e.diasTrabajados);
+      const salTotal = parseFloat(e.salarioDiario) * dias;
+      const ptu_dias = (dias / totalDias) * mitad;
+      const ptu_sal = (salTotal / totalSalarios) * mitad;
+      return { ...e, ptu_dias, ptu_sal, total: ptu_dias + ptu_sal };
+    });
+    setR({ resultados, totalPTU: util });
+  };
+
+  return (
+    <div>
+      <Input label="Utilidad fiscal del ejercicio $" type="number" value={utilidad} onChange={e=>setUtilidad(e.target.value)} placeholder="Ej: 500000" />
+      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
+        Art. 123 CPEUM · Art. 117-131 LFT — 10% de la utilidad fiscal. 50% en partes iguales por días trabajados y 50% proporcional al salario.
+      </div>
+      <div style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>Empleados</div>
+          <Btn variant="ghost" onClick={addEmpleado} style={{ padding:"6px 14px", fontSize:12 }}>+ Agregar empleado</Btn>
+        </div>
+        {empleados.map((e,i)=>(
+          <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr auto", gap:10, marginBottom:10, alignItems:"end" }}>
+            <Input label={i===0?"Nombre":"" } value={e.nombre} onChange={ev=>updEmpleado(i,"nombre",ev.target.value)} placeholder="Nombre del empleado" style={{ marginBottom:0 }} />
+            <Input label={i===0?"Días trabajados":""} type="number" value={e.diasTrabajados} onChange={ev=>updEmpleado(i,"diasTrabajados",ev.target.value)} style={{ marginBottom:0 }} />
+            <Input label={i===0?"Salario diario $":""} type="number" value={e.salarioDiario} onChange={ev=>updEmpleado(i,"salarioDiario",ev.target.value)} placeholder="331" style={{ marginBottom:0 }} />
+            <button onClick={()=>delEmpleado(i)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"10px 12px", fontFamily:"inherit" }}>✕</button>
+          </div>
+        ))}
+      </div>
+      <Btn onClick={calcular}>Calcular PTU ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20 }}>
+          <Card style={{ padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"12px 16px", background:C.navy, color:C.white, fontWeight:700 }}>
+              Distribución PTU — 10% de ${fmt(r.totalPTU)}
+            </div>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:C.panel }}>
+                  {["Empleado","PTU por días","PTU por salario","TOTAL"].map(h=>(
+                    <th key={h} style={{ padding:"8px 12px", color:C.muted, fontSize:11, fontWeight:700, textAlign:"right", textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {r.resultados.map((e,i)=>(
+                  <tr key={i} style={{ background: i%2===0?C.panel:"white" }}>
+                    <td style={{ padding:"10px 12px", color:C.text, fontWeight:600, fontSize:13 }}>{e.nombre||`Empleado ${i+1}`}</td>
+                    <td style={{ padding:"10px 12px", color:C.accent, textAlign:"right", fontWeight:600 }}>${fmt(e.ptu_dias)}</td>
+                    <td style={{ padding:"10px 12px", color:C.accent, textAlign:"right", fontWeight:600 }}>${fmt(e.ptu_sal)}</td>
+                    <td style={{ padding:"10px 12px", color:C.green, textAlign:"right", fontWeight:800 }}>${fmt(e.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalcPrimaAntiguedad() {
+  const [sd, setSd] = useState("");
+  const [fi, setFi] = useState("");
+  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
+  const [r, setR] = useState(null);
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular = () => {
+    const salDiario = parseFloat(sd);
+    if (!salDiario || !fi) return;
+    const inicio = new Date(fi), fin = new Date(ff);
+    const dias = Math.floor((fin - inicio) / (1000*60*60*24));
+    const anios = Math.floor(dias / 365);
+    // Tope: 2 UMAs diarias
+    const tope = UMA_DIARIA_2026 * 2;
+    const baseCalculo = Math.min(salDiario, tope);
+    const prima = anios * 12 * baseCalculo;
+    setR({ anios, dias, salDiario, tope, baseCalculo, prima });
+  };
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:16 }}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
+        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
+      </div>
+      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
+        Art. 162 LFT — 12 días de salario por año trabajado. Tope máximo: 2 UMAs diarias (${fmt(UMA_DIARIA_2026 * 2)}/día en 2026).
+      </div>
+      <Btn onClick={calcular}>Calcular prima ▶</Btn>
+      {r && (
+        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+          {[
+            { l:"Años de antigüedad", v:`${r.anios} años`, c:C.navy, bg:C.navyDim },
+            { l:"Salario base de cálculo", v:`$${fmt(r.baseCalculo)}/día`, c:r.salDiario > r.tope ? C.red : C.green, bg: r.salDiario > r.tope ? C.redBg : C.greenBg },
+            { l:"Prima de antigüedad", v:`$${fmt(r.prima)}`, c:C.green, bg:C.greenBg },
+          ].map(x=>(
+            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
+              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
+              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
+            </div>
+          ))}
+          {r.salDiario > r.tope && (
+            <div style={{ gridColumn:"1/-1", background:C.yellowBg, border:`1px solid ${C.yellow}44`, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.yellow, fontWeight:600 }}>
+              ⚠️ El salario diario (${fmt(r.salDiario)}) supera el tope de 2 UMAs (${fmt(r.tope)}). Se usa el tope para el cálculo.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Módulo principal de Cálculos ──────────────────────────────────────────
+function CalculosModule() {
+  const [seccion, setSeccion] = useState(null); // null = menú principal
+
+  const CALCULOS = [
+    { id:"nomina",      icon:"💵", label:"Nómina",              desc:"ISR, IMSS, INFONAVIT 2026",         color:C.navy },
+    { id:"vacaciones",  icon:"🌴", label:"Vacaciones",          desc:"Prima vacacional y días LFT",        color:"#0891B2" },
+    { id:"aguinaldo",   icon:"🎁", label:"Aguinaldo",           desc:"Proporcional al año en curso",       color:"#D97706" },
+    { id:"finiquito",   icon:"📄", label:"Finiquito",           desc:"Renuncia voluntaria",                color:"#7C3AED" },
+    { id:"liquidacion", icon:"⚖️", label:"Liquidación",         desc:"Despido justificado / injustificado",color:C.red },
+    { id:"ptu",         icon:"💰", label:"PTU",                 desc:"Participación de Utilidades 10%",    color:C.green },
+    { id:"antiguedad",  icon:"🏅", label:"Prima de Antigüedad", desc:"Art. 162 LFT — 12 días por año",    color:"#B45309" },
+  ];
+
+  if (!seccion) return (
+    <div style={{ padding:28 }}>
+      <style>{ANIM}</style>
+      <div style={{ marginBottom:28, animation:"fadeUp 0.3s ease" }}>
+        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:22, fontWeight:800 }}>Cálculos Laborales</h1>
+        <p style={{ margin:0, color:C.muted, fontSize:13 }}>Selecciona el cálculo que necesitas</p>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:16 }}>
+        {CALCULOS.map((c,i) => (
+          <div key={c.id} className="card" onClick={()=>setSeccion(c.id)}
+            style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:16, padding:24, cursor:"pointer", display:"flex", alignItems:"center", gap:18, transition:"all 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}
+            onMouseEnter={e=>{e.currentTarget.style.border=`1.5px solid ${c.color}`;e.currentTarget.style.boxShadow=`0 4px 20px ${c.color}22`;e.currentTarget.style.transform="translateY(-2px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.border=`1.5px solid ${C.border}`;e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";e.currentTarget.style.transform="";}}>
+            <div style={{ width:60, height:60, borderRadius:14, background:c.color+"18", border:`1.5px solid ${c.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>{c.icon}</div>
+            <div>
+              <div style={{ color:C.navy, fontWeight:800, fontSize:15, marginBottom:4 }}>{c.label}</div>
+              <div style={{ color:C.muted, fontSize:12 }}>{c.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const calc = CALCULOS.find(c=>c.id===seccion);
+  const COMPONENTES = { nomina:<NominaModule/>, vacaciones:<CalcVacaciones/>, aguinaldo:<CalcAguinaldo/>, finiquito:<CalcFiniquito/>, liquidacion:<CalcLiquidacion/>, ptu:<CalcPTU/>, antiguedad:<CalcPrimaAntiguedad/> };
+
+  return (
+    <div style={{ padding:28, maxWidth:950 }}>
+      <style>{ANIM}</style>
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:28, animation:"fadeUp 0.3s ease" }}>
+        <button onClick={()=>setSeccion(null)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13 }}>← Cálculos</button>
+        <div style={{ width:44, height:44, borderRadius:12, background:calc.color+"18", border:`1.5px solid ${calc.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>{calc.icon}</div>
+        <div>
+          <h1 style={{ margin:0, color:C.navy, fontSize:20, fontWeight:800 }}>{calc.label}</h1>
+          <p style={{ margin:0, color:C.muted, fontSize:13 }}>{calc.desc}</p>
+        </div>
+      </div>
+      {COMPONENTES[seccion]}
+    </div>
+  );
+}
+
 // ── ASISTENTE IA ──────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `Eres el Asistente Contable de COFSA (Consultoría Contable Fiscal y Administrativa), un despacho contable mexicano. Tu nombre es "Asistente COFSA".
 
@@ -2128,7 +2581,7 @@ export default function App() {
     tareas: <TareasModule user={user} initialClient={clientFilter} />,
     chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} />,
-    nomina: <NominaModule />,
+    nomina: <CalculosModule />,
     asistente: <AsistenteModule user={user} />,
   };
 
