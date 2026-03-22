@@ -1908,396 +1908,589 @@ function NominaModule() {
 
 // ── CÁLCULOS LABORALES ────────────────────────────────────────────────────
 
-// ── Vacaciones LFT 2026 ──
 const TABLA_VACACIONES = [
-  { anios:1,  dias:12 }, { anios:2,  dias:14 }, { anios:3,  dias:16 },
-  { anios:4,  dias:18 }, { anios:5,  dias:20 }, { anios:6,  dias:22 },
-  { anios:7,  dias:24 }, { anios:8,  dias:26 }, { anios:9,  dias:28 },
-  { anios:10, dias:30 }, { anios:11, dias:32 }, { anios:12, dias:34 },
-  { anios:13, dias:36 }, { anios:14, dias:38 }, { anios:15, dias:40 },
+  { anios:1,dias:12},{anios:2,dias:14},{anios:3,dias:16},{anios:4,dias:18},{anios:5,dias:20},
+  { anios:6,dias:22},{anios:7,dias:24},{anios:8,dias:26},{anios:9,dias:28},{anios:10,dias:30},
+  { anios:11,dias:32},{anios:12,dias:34},{anios:13,dias:36},{anios:14,dias:38},{anios:15,dias:40},
 ];
 function diasVacaciones(anios) {
   if (anios < 1) return 0;
-  const found = TABLA_VACACIONES.slice().reverse().find(t => anios >= t.anios);
-  return found ? found.dias + Math.floor((anios - found.anios) / 5) * 2 : 12;
+  const found = TABLA_VACACIONES.slice().reverse().find(t=>anios>=t.anios);
+  return found ? found.dias + Math.floor((anios-found.anios)/5)*2 : 12;
 }
 
-function CalcVacaciones() {
-  const [sd, setSd] = useState("");
-  const [fi, setFi] = useState("");
-  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  const calcular = () => {
-    const salDiario = parseFloat(sd);
-    if (!salDiario || !fi) return;
-    const inicio = new Date(fi), fin = new Date(ff);
-    const dias_trabajados = Math.floor((fin - inicio) / (1000*60*60*24));
-    const anios = dias_trabajados / 365;
-    const anios_completos = Math.floor(anios);
-    const dias_vac = diasVacaciones(anios_completos);
-    // Vacaciones proporcionales al año en curso
-    const dias_anio_actual = dias_trabajados - anios_completos * 365;
-    const vac_proporcionales = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
-    const prima = dias_vac * salDiario * 0.25;
-    const prima_prop = vac_proporcionales * salDiario * 0.25;
-    setR({ anios: anios.toFixed(2), anios_completos, dias_vac, vac_proporcionales, prima, prima_prop, salDiario });
-  };
-
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:20 }}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
-        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
-        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
-      </div>
-      <Btn onClick={calcular}>Calcular vacaciones ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
-          {[
-            { l:"Antigüedad", v:`${r.anios} años`, c:C.navy, bg:C.navyDim },
-            { l:"Días de vacaciones (año completo)", v:`${r.dias_vac} días`, c:C.accent, bg:C.navyDim },
-            { l:"Prima vacacional (25%)", v:`$${fmt(r.prima)}`, c:C.green, bg:C.greenBg },
-            { l:"Vac. proporcionales (año en curso)", v:`${r.vac_proporcionales} días`, c:C.yellow, bg:C.yellowBg },
-            { l:"Prima proporcional", v:`$${fmt(r.prima_prop)}`, c:C.yellow, bg:C.yellowBg },
-            { l:"Salario diario base", v:`$${fmt(r.salDiario)}`, c:C.muted, bg:C.panel },
-          ].map(x=>(
-            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
-              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
-              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CalcAguinaldo() {
-  const [sd, setSd] = useState("");
-  const [fi, setFi] = useState("");
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  const calcular = () => {
-    const salDiario = parseFloat(sd);
-    if (!salDiario || !fi) return;
-    const inicio = new Date(fi);
-    const diciembre = new Date(new Date().getFullYear(), 11, 20); // 20 de diciembre
-    const dias_trabajados = Math.floor((diciembre - inicio) / (1000*60*60*24));
-    const dias_anio = Math.min(dias_trabajados, 365);
-    // LFT: mínimo 15 días de aguinaldo
-    const dias_aguinaldo_completo = 15;
-    const aguinaldo_prop = (dias_anio / 365) * dias_aguinaldo_completo * salDiario;
-    const aguinaldo_completo = dias_aguinaldo_completo * salDiario;
-    setR({ dias_anio, aguinaldo_prop, aguinaldo_completo, salDiario, dias_aguinaldo_completo });
-  };
-
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
-        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
-      </div>
-      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
-        Art. 87 LFT — Mínimo 15 días de salario. Cálculo al 20 de diciembre del año en curso.
-      </div>
-      <Btn onClick={calcular}>Calcular aguinaldo ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
-          {[
-            { l:"Días trabajados en el año", v:`${r.dias_anio} días`, c:C.navy, bg:C.navyDim },
-            { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo_prop)}`, c:C.green, bg:C.greenBg },
-            { l:"Aguinaldo año completo", v:`$${fmt(r.aguinaldo_completo)}`, c:C.accent, bg:C.navyDim },
-          ].map(x=>(
-            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
-              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
-              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CalcFiniquito() {
-  const [sd, setSd] = useState("");
-  const [fi, setFi] = useState("");
-  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  const calcular = () => {
-    const salDiario = parseFloat(sd);
-    if (!salDiario || !fi) return;
-    const inicio = new Date(fi), fin = new Date(ff);
-    const dias_total = Math.floor((fin - inicio) / (1000*60*60*24));
-    const anios = dias_total / 365;
-    const anios_completos = Math.floor(anios);
-
-    // Días trabajados en el año en curso
-    const dias_anio_actual = dias_total - anios_completos * 365;
-
-    // Partes proporcionales
-    const dias_vac = diasVacaciones(anios_completos);
-    const vac_prop = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
-    const prima_vac = vac_prop * salDiario * 0.25;
-    const aguinaldo = (dias_anio_actual / 365) * 15 * salDiario;
-    const salarios_pendientes = dias_anio_actual % 30 === 0 ? 0 : (dias_anio_actual % 30) * salDiario;
-    // Prima de antigüedad (12 días por año, máx 2 UMAs diarias)
-    const uma2 = UMA_DIARIA_2026 * 2;
-    const base_prima_ant = Math.min(salDiario, uma2);
-    const prima_antiguedad = anios_completos >= 15 ? anios_completos * 12 * base_prima_ant : 0;
-
-    const total = vac_prop * salDiario + prima_vac + aguinaldo + salarios_pendientes + prima_antiguedad;
-
-    setR({ anios: anios.toFixed(2), vac_prop, prima_vac, aguinaldo, salarios_pendientes, prima_antiguedad, total, dias_anio_actual });
-  };
-
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:20 }}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
-        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
-        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
-      </div>
-      <Btn onClick={calcular}>Calcular finiquito ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:14 }}>
-            {[
-              { l:"Vacaciones proporcionales", v:`$${fmt(r.vac_prop * parseFloat(sd))}`, c:C.accent, bg:C.navyDim },
-              { l:"Prima vacacional (25%)", v:`$${fmt(r.prima_vac)}`, c:C.accent, bg:C.navyDim },
-              { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo)}`, c:C.yellow, bg:C.yellowBg },
-              { l:"Salarios pendientes", v:`$${fmt(r.salarios_pendientes)}`, c:C.navy, bg:C.navyDim },
-              { l:"Prima antigüedad (15+ años)", v:`$${fmt(r.prima_antiguedad)}`, c:C.muted, bg:C.panel },
-              { l:"TOTAL FINIQUITO", v:`$${fmt(r.total)}`, c:C.green, bg:C.greenBg },
-            ].map(x=>(
-              <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
-                <div style={{ color:x.c, fontSize:x.l==="TOTAL FINIQUITO"?22:18, fontWeight:800 }}>{x.v}</div>
-                <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CalcLiquidacion() {
-  const [sd, setSd] = useState("");
-  const [fi, setFi] = useState("");
-  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
-  const [tipo, setTipo] = useState("injustificado");
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  const calcular = () => {
-    const salDiario = parseFloat(sd);
-    if (!salDiario || !fi) return;
-    const inicio = new Date(fi), fin = new Date(ff);
-    const dias_total = Math.floor((fin - inicio) / (1000*60*60*24));
-    const anios = dias_total / 365;
-    const anios_completos = Math.floor(anios);
-    const dias_anio_actual = dias_total - anios_completos * 365;
-
-    // Partes del finiquito
-    const vac_prop = Math.round((dias_anio_actual / 365) * diasVacaciones(anios_completos + 1));
-    const prima_vac = vac_prop * salDiario * 0.25;
-    const aguinaldo = (dias_anio_actual / 365) * 15 * salDiario;
-    const uma2 = UMA_DIARIA_2026 * 2;
-    const base_prima = Math.min(salDiario, uma2);
-    const prima_antiguedad = anios_completos * 12 * base_prima;
-
-    // Indemnización constitucional (solo despido injustificado)
-    const tres_meses = 90 * salDiario;
-    const veinte_dias = anios_completos * 20 * salDiario;
-    const indemnizacion = tipo === "injustificado" ? tres_meses + veinte_dias : 0;
-
-    const finiquito = vac_prop * salDiario + prima_vac + aguinaldo;
-    const total = finiquito + prima_antiguedad + indemnizacion;
-
-    setR({ anios: anios.toFixed(2), vac_prop, prima_vac, aguinaldo, prima_antiguedad, tres_meses, veinte_dias, indemnizacion, finiquito, total });
-  };
-
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:16 }}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
-        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
-        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
-      </div>
-      <div style={{ marginBottom:16 }}>
-        <div style={{ color:C.muted, fontSize:11, marginBottom:8, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Tipo de separación</div>
-        <div style={{ display:"flex", gap:8 }}>
-          {[["injustificado","Despido injustificado (Art. 48 LFT)"],["justificado","Despido justificado"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setTipo(v)} style={{ padding:"9px 18px", borderRadius:9, border:`1.5px solid ${tipo===v?C.navy:C.border}`, background:tipo===v?C.navy:"transparent", color:tipo===v?C.white:C.muted, cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13, transition:"all 0.15s" }}>{l}</button>
-          ))}
-        </div>
-      </div>
-      <Btn onClick={calcular}>Calcular liquidación ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:12 }}>
-            {[
-              { l:"Vacaciones proporcionales", v:`$${fmt(r.vac_prop * parseFloat(sd))}`, c:C.accent, bg:C.navyDim },
-              { l:"Prima vacacional", v:`$${fmt(r.prima_vac)}`, c:C.accent, bg:C.navyDim },
-              { l:"Aguinaldo proporcional", v:`$${fmt(r.aguinaldo)}`, c:C.yellow, bg:C.yellowBg },
-              { l:"Prima de antigüedad (12 días/año)", v:`$${fmt(r.prima_antiguedad)}`, c:C.navy, bg:C.navyDim },
-              ...(tipo==="injustificado" ? [
-                { l:"3 meses (Art. 50 LFT)", v:`$${fmt(r.tres_meses)}`, c:C.red, bg:C.redBg },
-                { l:"20 días por año (Art. 50 LFT)", v:`$${fmt(r.veinte_dias)}`, c:C.red, bg:C.redBg },
-              ] : []),
-              { l:"TOTAL LIQUIDACIÓN", v:`$${fmt(r.total)}`, c:C.green, bg:C.greenBg },
-            ].map(x=>(
-              <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
-                <div style={{ color:x.c, fontSize:x.l.includes("TOTAL")?20:17, fontWeight:800 }}>{x.v}</div>
-                <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CalcPTU() {
-  const [utilidad, setUtilidad] = useState("");
-  const [empleados, setEmpleados] = useState([{ nombre:"", diasTrabajados:"365", salarioDiario:"" }]);
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  const addEmpleado = () => setEmpleados(p=>[...p, { nombre:"", diasTrabajados:"365", salarioDiario:"" }]);
-  const updEmpleado = (i, f, v) => setEmpleados(p=>p.map((e,idx)=>idx===i?{...e,[f]:v}:e));
-  const delEmpleado = (i) => setEmpleados(p=>p.filter((_,idx)=>idx!==i));
-
-  const calcular = () => {
-    const util = parseFloat(utilidad);
-    if (!util) return;
-    const mitad = util / 2; // 50% por días trabajados, 50% por salarios
-    const validos = empleados.filter(e => e.salarioDiario && e.diasTrabajados);
-    if (!validos.length) return;
-
-    const totalDias = validos.reduce((s,e)=>s+parseInt(e.diasTrabajados),0);
-    const totalSalarios = validos.reduce((s,e)=>s+parseFloat(e.salarioDiario)*parseInt(e.diasTrabajados),0);
-
-    const resultados = validos.map(e=>{
-      const dias = parseInt(e.diasTrabajados);
-      const salTotal = parseFloat(e.salarioDiario) * dias;
-      const ptu_dias = (dias / totalDias) * mitad;
-      const ptu_sal = (salTotal / totalSalarios) * mitad;
-      return { ...e, ptu_dias, ptu_sal, total: ptu_dias + ptu_sal };
+async function generarPDFLaboral({ titulo, subtitulo, trabajador, empresa, filas }) {
+  if (!window.jspdf) {
+    await new Promise((resolve,reject)=>{
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
     });
-    setR({ resultados, totalPTU: util });
+  }
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+  const W=216,M=18,TW=W-M*2;
+  let y=20;
+  const fmt=n=>typeof n==="number"?n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}):String(n);
+
+  try { doc.addImage(LOGO_B64,"JPEG",M,y,22,22); } catch(e){}
+  doc.setFontSize(18); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+  doc.text("CIA COFSA SERVICE", M+26, y+8);
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+  doc.text("Consultoria Contable Fiscal y Administrativa", M+26, y+14);
+  doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX",{year:"numeric",month:"long",day:"numeric"})}`, M+26, y+19);
+  y+=28; doc.setDrawColor(27,42,74); doc.setLineWidth(0.8); doc.line(M,y,W-M,y); y+=8;
+
+  doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+  doc.text(titulo.toUpperCase(), M, y);
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+  doc.text(subtitulo, M, y+5); y+=14;
+
+  if (trabajador||empresa) {
+    doc.setFillColor(238,242,251); doc.roundedRect(M,y,TW,10,2,2,"F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(27,42,74);
+    if (trabajador&&empresa) {
+      doc.text(`Trabajador: ${trabajador}`, M+4, y+7);
+      doc.text(`Empresa: ${empresa}`, M+TW/2+4, y+7);
+    } else {
+      doc.text(trabajador?`Trabajador: ${trabajador}`:`Empresa: ${empresa}`, M+4, y+7);
+    }
+    y+=14;
+  }
+
+  const xVal=M+TW;
+  doc.setFillColor(27,42,74); doc.rect(M,y,TW,7,"F");
+  doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","bold");
+  doc.text("CONCEPTO", M+3, y+5); doc.text("IMPORTE", xVal-3, y+5, {align:"right"}); y+=7;
+
+  filas.forEach((f,i)=>{
+    if(y>255){doc.addPage();y=20;}
+    if(f.tipo==="section"){
+      doc.setFillColor(238,242,251); doc.rect(M,y,TW,6,"F");
+      doc.setTextColor(27,42,74); doc.setFontSize(7); doc.setFont("helvetica","bold");
+      doc.text(f.label, M+3, y+4);
+    } else if(f.tipo==="total"){
+      doc.setFillColor(220,228,250); doc.rect(M,y,TW,8,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(27,42,74);
+      doc.text(f.label, M+3, y+5);
+      doc.setTextColor(20,130,60); doc.text(`$${fmt(f.valor)}`, xVal-3, y+5, {align:"right"}); y+=2;
+    } else {
+      doc.setFillColor(i%2===0?248:255,i%2===0?249:255,i%2===0?252:255); doc.rect(M,y,TW,6,"F");
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(30,41,59);
+      doc.text(f.label, M+3, y+4);
+      if(f.valor!==undefined){
+        const isNum=typeof f.valor==="number";
+        doc.setTextColor(isNum?27:100,isNum?42:116,isNum?74:139);
+        doc.text(isNum?`$${fmt(f.valor)}`:String(f.valor), xVal-3, y+4, {align:"right"});
+      }
+    }
+    doc.setDrawColor(210,218,232); doc.setLineWidth(0.1);
+    doc.rect(M,y,TW,f.tipo==="total"?8:6,"S");
+    y+=f.tipo==="total"?8:6;
+  });
+
+  y+=6; doc.setDrawColor(27,42,74); doc.setLineWidth(0.4); doc.line(M,y,W-M,y); y+=5;
+  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+  doc.text("Calculos referenciales conforme a la LFT 2026.", M, y);
+  doc.text(`CIA COFSA SERVICE - ${new Date().toLocaleDateString("es-MX")}`, W-M, y, {align:"right"});
+  doc.save(`COFSA_${titulo.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function CamposPersona({ trabajador, setTrabajador, empresa, setEmpresa }) {
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16,padding:14,background:C.navyDim,borderRadius:12,border:`1px solid ${C.navy}22`}}>
+      <Input label="Nombre del trabajador" value={trabajador} onChange={e=>setTrabajador(e.target.value)} placeholder="Ej: Juan Garcia Lopez"/>
+      <Input label="Empresa / Cliente" value={empresa} onChange={e=>setEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A."/>
+    </div>
+  );
+}
+
+function TablaDesglose({ filas, total, labelTotal }) {
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return (
+    <Card style={{padding:0,overflow:"hidden",marginTop:16}}>
+      <div style={{padding:"10px 16px",background:C.navy,color:C.white,fontWeight:700,fontSize:13}}>Desglose completo</div>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <tbody>
+          {filas.map(([k,v],i)=>(
+            <tr key={k} style={{background:i%2===0?C.panel:"white"}}>
+              <td style={{padding:"9px 16px",color:C.text,fontSize:13}}>{k}</td>
+              <td style={{padding:"9px 16px",color:C.navy,fontSize:13,fontWeight:600,textAlign:"right"}}>{v}</td>
+            </tr>
+          ))}
+          <tr style={{background:C.greenBg}}>
+            <td style={{padding:"12px 16px",color:C.green,fontWeight:800,fontSize:14}}>{labelTotal}</td>
+            <td style={{padding:"12px 16px",color:C.green,fontWeight:800,fontSize:18,textAlign:"right"}}>${fmt(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function TarjetasResumen({ items }) {
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:4}}>
+      {items.map(x=>(
+        <div key={x.l} style={{background:x.bg,border:`1.5px solid ${x.c}22`,borderRadius:12,padding:16,textAlign:"center"}}>
+          <div style={{color:x.c,fontSize:x.grande?22:18,fontWeight:800}}>{x.v}</div>
+          <div style={{color:x.c,fontSize:11,marginTop:4,opacity:0.8}}>{x.l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BotonesCalc({ onCalc, onPDF, genPDF, resultado }) {
+  return (
+    <div style={{display:"flex",gap:10,marginBottom:20}}>
+      <Btn onClick={onCalc}>Calcular ▶</Btn>
+      {resultado && <Btn variant="ghost" onClick={onPDF} loading={genPDF}>⬇️ Descargar PDF</Btn>}
+    </div>
+  );
+}
+
+// ── VACACIONES ──
+function CalcVacaciones() {
+  const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
+  const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular=()=>{
+    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const inicio=new Date(fi),fin=new Date(ff);
+    const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
+    const anios=dias_total/365; const anios_c=Math.floor(anios);
+    const dias_anio=dias_total-anios_c*365;
+    const dias_vac=diasVacaciones(anios_c);
+    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
+    const prima_anual=diasVacaciones(anios_c)*salDiario*0.25;
+    setR({anios:anios.toFixed(2),anios_c,dias_vac,vac_prop,importe_vac,prima_vac,prima_anual,salDiario,fi,ff,total:importe_vac+prima_vac});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Calculo de Vacaciones", subtitulo:"Art. 76 LFT 2026 - Prima vacacional 25%", trabajador, empresa, filas:[
+      {tipo:"section",label:"DATOS GENERALES"},
+      {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de calculo",valor:r.ff},
+      {label:"Salario diario",valor:r.salDiario},{label:"Antiguedad",valor:`${r.anios} anos`},
+      {tipo:"section",label:"VACACIONES PROPORCIONALES"},
+      {label:"Dias proporcionales correspondientes",valor:`${r.vac_prop} dias`},
+      {label:"Importe vacaciones prop.",valor:r.importe_vac},
+      {label:"Prima vacacional (25%)",valor:r.prima_vac},
+      {tipo:"total",label:"TOTAL A PAGAR",valor:r.total},
+    ]}); setGen(false);
   };
 
   return (
     <div>
-      <Input label="Utilidad fiscal del ejercicio $" type="number" value={utilidad} onChange={e=>setUtilidad(e.target.value)} placeholder="Ej: 500000" />
-      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
-        Art. 123 CPEUM · Art. 117-131 LFT — 10% de la utilidad fiscal. 50% en partes iguales por días trabajados y 50% proporcional al salario.
+      <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
+        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
       </div>
-      <div style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>Empleados</div>
-          <Btn variant="ghost" onClick={addEmpleado} style={{ padding:"6px 14px", fontSize:12 }}>+ Agregar empleado</Btn>
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        <TarjetasResumen items={[
+          {l:"Antigüedad",v:`${r.anios} años`,c:C.navy,bg:C.navyDim},
+          {l:"Días vacaciones (año completo)",v:`${r.dias_vac} días`,c:C.accent,bg:C.navyDim},
+          {l:"Prima vacacional anual",v:`$${fmt(r.prima_anual)}`,c:C.accent,bg:C.navyDim},
+          {l:"Días proporcionales",v:`${r.vac_prop} días`,c:C.yellow,bg:C.yellowBg},
+          {l:"Prima proporcional (25%)",v:`$${fmt(r.prima_vac)}`,c:C.yellow,bg:C.yellowBg},
+          {l:"TOTAL A PAGAR",v:`$${fmt(r.total)}`,c:C.green,bg:C.greenBg,grande:true},
+        ]}/>
+        <TablaDesglose total={r.total} labelTotal="TOTAL A PAGAR" filas={[
+          ["Fecha de ingreso",r.fi],["Fecha de cálculo",r.ff],["Antigüedad",`${r.anios} años`],
+          ["Salario diario",`$${fmt(r.salDiario)}`],["Días vacaciones año completo",`${r.dias_vac} días`],
+          ["Días proporcionales (año en curso)",`${r.vac_prop} días`],
+          ["Importe vacaciones proporcionales",`$${fmt(r.importe_vac)}`],
+          ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
+        ]}/>
+      </>)}
+    </div>
+  );
+}
+
+// ── AGUINALDO ──
+function CalcAguinaldo() {
+  const [sd,setSd]=useState(""); const [fi,setFi]=useState("");
+  const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular=()=>{
+    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const inicio=new Date(fi); const dic=new Date(new Date().getFullYear(),11,20);
+    const dias_anio=Math.min(Math.floor((dic-inicio)/(1000*60*60*24)),365);
+    const prop=(dias_anio/365)*15*salDiario; const completo=15*salDiario;
+    setR({dias_anio,prop,completo,salDiario,fi,anio:new Date().getFullYear()});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Calculo de Aguinaldo", subtitulo:"Art. 87 LFT - Minimo 15 dias de salario", trabajador, empresa, filas:[
+      {tipo:"section",label:"DATOS GENERALES"},
+      {label:"Fecha de ingreso",valor:r.fi},{label:"Ejercicio",valor:String(r.anio)},
+      {label:"Salario diario",valor:r.salDiario},{label:"Dias trabajados en el ejercicio",valor:`${r.dias_anio} dias`},
+      {tipo:"section",label:"CALCULO"},
+      {label:"Dias de aguinaldo minimo legal","valor":"15 dias"},{label:"Factor (dias/365)",valor:(r.dias_anio/365).toFixed(4)},
+      {label:"Aguinaldo proporcional",valor:r.prop},{label:"Aguinaldo ano completo (ref.)",valor:r.completo},
+      {tipo:"total",label:"AGUINALDO A PAGAR",valor:r.prop},
+    ]}); setGen(false);
+  };
+
+  return (
+    <div>
+      <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
+      </div>
+      <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.muted,marginBottom:16}}>Art. 87 LFT — Mínimo 15 días de salario. Cálculo al 20 de diciembre del año en curso.</div>
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        <TarjetasResumen items={[
+          {l:"Días trabajados en el año",v:`${r.dias_anio} días`,c:C.navy,bg:C.navyDim},
+          {l:"Aguinaldo proporcional",v:`$${fmt(r.prop)}`,c:C.green,bg:C.greenBg,grande:true},
+          {l:"Aguinaldo año completo (ref.)",v:`$${fmt(r.completo)}`,c:C.accent,bg:C.navyDim},
+        ]}/>
+        <TablaDesglose total={r.prop} labelTotal="AGUINALDO A PAGAR" filas={[
+          ["Fecha de ingreso",r.fi],["Ejercicio",String(r.anio)],["Salario diario",`$${fmt(r.salDiario)}`],
+          ["Días trabajados",`${r.dias_anio} días`],["Días mínimo legal","15 días"],
+          ["Factor proporcional",(r.dias_anio/365).toFixed(4)],
+          ["Aguinaldo año completo (ref.)",`$${fmt(r.completo)}`],
+        ]}/>
+      </>)}
+    </div>
+  );
+}
+
+// ── FINIQUITO ──
+function CalcFiniquito() {
+  const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
+  const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular=()=>{
+    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const inicio=new Date(fi),fin=new Date(ff);
+    const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
+    const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
+    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
+    const aguinaldo=(dias_anio/365)*15*salDiario;
+    const dias_pend=dias_anio%30; const salarios_pend=dias_pend*salDiario;
+    const uma2=UMA_DIARIA_2026*2; const base_ant=Math.min(salDiario,uma2);
+    const prima_ant=anios_c>=15?anios_c*12*base_ant:0;
+    const total=importe_vac+prima_vac+aguinaldo+salarios_pend+prima_ant;
+    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,salarios_pend,dias_pend,prima_ant,total,salDiario,fi,ff});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Calculo de Finiquito", subtitulo:"Renuncia voluntaria - LFT 2026", trabajador, empresa, filas:[
+      {tipo:"section",label:"DATOS GENERALES"},
+      {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de baja",valor:r.ff},
+      {label:"Antiguedad",valor:`${r.anios_c} anos`},{label:"Salario diario",valor:r.salDiario},
+      {tipo:"section",label:"PARTES PROPORCIONALES"},
+      {label:`Vacaciones prop. (${r.vac_prop} dias)`,valor:r.importe_vac},
+      {label:"Prima vacacional (25%)",valor:r.prima_vac},
+      {label:"Aguinaldo proporcional",valor:r.aguinaldo},
+      {label:`Salarios pendientes (${r.dias_pend} dias)`,valor:r.salarios_pend},
+      {tipo:"section",label:"PRIMA ANTIGUEDAD (solo 15+ anos)"},
+      {label:`${r.anios_c} anos x 12 dias x base`,valor:r.prima_ant},
+      {tipo:"total",label:"TOTAL FINIQUITO",valor:r.total},
+    ]}); setGen(false);
+  };
+
+  return (
+    <div>
+      <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
+        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
+      </div>
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        <TarjetasResumen items={[
+          {l:"Vacaciones proporcionales",v:`$${fmt(r.importe_vac)}`,c:C.accent,bg:C.navyDim},
+          {l:"Prima vacacional (25%)",v:`$${fmt(r.prima_vac)}`,c:C.accent,bg:C.navyDim},
+          {l:"Aguinaldo proporcional",v:`$${fmt(r.aguinaldo)}`,c:C.yellow,bg:C.yellowBg},
+          {l:"Salarios pendientes",v:`$${fmt(r.salarios_pend)}`,c:C.navy,bg:C.navyDim},
+          {l:"Prima antigüedad (15+ años)",v:`$${fmt(r.prima_ant)}`,c:C.muted,bg:C.panel},
+          {l:"TOTAL FINIQUITO",v:`$${fmt(r.total)}`,c:C.green,bg:C.greenBg,grande:true},
+        ]}/>
+        <TablaDesglose total={r.total} labelTotal="TOTAL FINIQUITO" filas={[
+          ["Antigüedad",`${r.anios_c} años`],["Días en año en curso",`${r.dias_anio} días`],
+          [`Vacaciones prop. (${r.vac_prop} días)`,`$${fmt(r.importe_vac)}`],
+          ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
+          ["Aguinaldo proporcional",`$${fmt(r.aguinaldo)}`],
+          [`Salarios pendientes (${r.dias_pend} días)`,`$${fmt(r.salarios_pend)}`],
+          ["Prima antigüedad (solo 15+ años)",`$${fmt(r.prima_ant)}`],
+        ]}/>
+      </>)}
+    </div>
+  );
+}
+
+// ── LIQUIDACIÓN ──
+function CalcLiquidacion() {
+  const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
+  const [tipo,setTipo]=useState("injustificado");
+  const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const calcular=()=>{
+    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const inicio=new Date(fi),fin=new Date(ff);
+    const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
+    const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
+    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
+    const aguinaldo=(dias_anio/365)*15*salDiario;
+    const uma2=UMA_DIARIA_2026*2; const base_ant=Math.min(salDiario,uma2);
+    const prima_ant=anios_c*12*base_ant;
+    const tres_meses=tipo==="injustificado"?90*salDiario:0;
+    const veinte_dias=tipo==="injustificado"?anios_c*20*salDiario:0;
+    const total=importe_vac+prima_vac+aguinaldo+prima_ant+tres_meses+veinte_dias;
+    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,prima_ant,tres_meses,veinte_dias,total,salDiario,fi,ff,tipo});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Calculo de Liquidacion",
+      subtitulo:r.tipo==="injustificado"?"Despido injustificado - Art. 48 LFT 2026":"Despido justificado - LFT 2026",
+      trabajador, empresa, filas:[
+        {tipo:"section",label:"DATOS GENERALES"},
+        {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de baja",valor:r.ff},
+        {label:"Antiguedad",valor:`${r.anios_c} anos`},{label:"Salario diario",valor:r.salDiario},
+        {tipo:"section",label:"PARTES PROPORCIONALES"},
+        {label:`Vacaciones prop. (${r.vac_prop} dias)`,valor:r.importe_vac},
+        {label:"Prima vacacional (25%)",valor:r.prima_vac},
+        {label:"Aguinaldo proporcional",valor:r.aguinaldo},
+        {tipo:"section",label:"PRIMA ANTIGUEDAD (Art. 162 LFT)"},
+        {label:`${r.anios_c} anos x 12 dias x base`,valor:r.prima_ant},
+        ...(r.tipo==="injustificado"?[
+          {tipo:"section",label:"INDEMNIZACION CONSTITUCIONAL (Art. 48 LFT)"},
+          {label:"3 meses de salario (90 dias)",valor:r.tres_meses},
+          {label:`20 dias por ano (${r.anios_c} anos x 20)`,valor:r.veinte_dias},
+        ]:[]),
+        {tipo:"total",label:"TOTAL LIQUIDACION",valor:r.total},
+      ]}); setGen(false);
+  };
+
+  return (
+    <div>
+      <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
+        <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de separación</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["injustificado","Despido injustificado (Art. 48 LFT)"],["justificado","Despido justificado"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setTipo(v)} style={{padding:"9px 18px",borderRadius:9,border:`1.5px solid ${tipo===v?C.navy:C.border}`,background:tipo===v?C.navy:"transparent",color:tipo===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13,transition:"all 0.15s"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        <TarjetasResumen items={[
+          {l:"Vacaciones proporcionales",v:`$${fmt(r.importe_vac)}`,c:C.accent,bg:C.navyDim},
+          {l:"Prima vacacional",v:`$${fmt(r.prima_vac)}`,c:C.accent,bg:C.navyDim},
+          {l:"Aguinaldo proporcional",v:`$${fmt(r.aguinaldo)}`,c:C.yellow,bg:C.yellowBg},
+          {l:"Prima de antigüedad",v:`$${fmt(r.prima_ant)}`,c:C.navy,bg:C.navyDim},
+          ...(r.tipo==="injustificado"?[
+            {l:"3 meses (Art. 48 LFT)",v:`$${fmt(r.tres_meses)}`,c:C.red,bg:C.redBg},
+            {l:"20 días por año",v:`$${fmt(r.veinte_dias)}`,c:C.red,bg:C.redBg},
+          ]:[]),
+          {l:"TOTAL LIQUIDACIÓN",v:`$${fmt(r.total)}`,c:C.green,bg:C.greenBg,grande:true},
+        ]}/>
+        <TablaDesglose total={r.total} labelTotal="TOTAL LIQUIDACIÓN" filas={[
+          ["Antigüedad",`${r.anios_c} años`],
+          [`Vacaciones prop. (${r.vac_prop} días)`,`$${fmt(r.importe_vac)}`],
+          ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
+          ["Aguinaldo proporcional",`$${fmt(r.aguinaldo)}`],
+          ["Prima antigüedad (Art. 162 LFT)",`$${fmt(r.prima_ant)}`],
+          ...(r.tipo==="injustificado"?[
+            ["3 meses de salario (Art. 48 LFT)",`$${fmt(r.tres_meses)}`],
+            [`20 días por año (${r.anios_c} años)`,`$${fmt(r.veinte_dias)}`],
+          ]:[]),
+        ]}/>
+      </>)}
+    </div>
+  );
+}
+
+// ── PTU ──
+function CalcPTU() {
+  const [utilidad,setUtilidad]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [empleados,setEmpleados]=useState([{nombre:"",diasTrabajados:"365",salarioDiario:""}]);
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const addEmp=()=>setEmpleados(p=>[...p,{nombre:"",diasTrabajados:"365",salarioDiario:""}]);
+  const updEmp=(i,f,v)=>setEmpleados(p=>p.map((e,idx)=>idx===i?{...e,[f]:v}:e));
+  const delEmp=(i)=>setEmpleados(p=>p.filter((_,idx)=>idx!==i));
+
+  const calcular=()=>{
+    const util=parseFloat(utilidad); if(!util) return;
+    const ptu=util*0.10; const mitad=ptu/2;
+    const validos=empleados.filter(e=>e.salarioDiario&&e.diasTrabajados); if(!validos.length) return;
+    const totalDias=validos.reduce((s,e)=>s+parseInt(e.diasTrabajados),0);
+    const totalSals=validos.reduce((s,e)=>s+parseFloat(e.salarioDiario)*parseInt(e.diasTrabajados),0);
+    const resultados=validos.map(e=>{
+      const dias=parseInt(e.diasTrabajados); const salTotal=parseFloat(e.salarioDiario)*dias;
+      const ptu_d=(dias/totalDias)*mitad; const ptu_s=(salTotal/totalSals)*mitad;
+      return{...e,ptu_d,ptu_s,total:ptu_d+ptu_s};
+    });
+    setR({resultados,ptu,utilidad:util});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Calculo de PTU", subtitulo:"Art. 123 CPEUM - Art. 117-131 LFT - 10% Utilidad Fiscal",
+      trabajador:"", empresa, filas:[
+        {tipo:"section",label:"DATOS DEL EJERCICIO"},
+        {label:"Utilidad fiscal",valor:r.utilidad},{label:"PTU (10%)",valor:r.ptu},
+        {label:"50% por dias trabajados",valor:r.ptu/2},{label:"50% por salarios",valor:r.ptu/2},
+        {tipo:"section",label:"DISTRIBUCION POR EMPLEADO"},
+        ...r.resultados.flatMap(e=>[
+          {label:`${e.nombre||"Empleado"} - PTU por dias`,valor:e.ptu_d},
+          {label:`${e.nombre||"Empleado"} - PTU por salario`,valor:e.ptu_s},
+          {label:`${e.nombre||"Empleado"} - TOTAL`,valor:e.total},
+        ]),
+        {tipo:"total",label:"TOTAL PTU REPARTIDO",valor:r.ptu},
+      ]}); setGen(false);
+  };
+
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16,padding:14,background:C.navyDim,borderRadius:12,border:`1px solid ${C.navy}22`}}>
+        <Input label="Utilidad fiscal del ejercicio $" type="number" value={utilidad} onChange={e=>setUtilidad(e.target.value)} placeholder="Ej: 500000"/>
+        <Input label="Empresa / Cliente" value={empresa} onChange={e=>setEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A."/>
+      </div>
+      <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.muted,marginBottom:16}}>
+        Art. 123 CPEUM · Art. 117-131 LFT — 10% de la utilidad fiscal. 50% días trabajados + 50% proporcional al salario.
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{color:C.navy,fontWeight:700,fontSize:14}}>Empleados</div>
+          <Btn variant="ghost" onClick={addEmp} style={{padding:"6px 14px",fontSize:12}}>+ Agregar empleado</Btn>
         </div>
         {empleados.map((e,i)=>(
-          <div key={i} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr auto", gap:10, marginBottom:10, alignItems:"end" }}>
-            <Input label={i===0?"Nombre":"" } value={e.nombre} onChange={ev=>updEmpleado(i,"nombre",ev.target.value)} placeholder="Nombre del empleado" style={{ marginBottom:0 }} />
-            <Input label={i===0?"Días trabajados":""} type="number" value={e.diasTrabajados} onChange={ev=>updEmpleado(i,"diasTrabajados",ev.target.value)} style={{ marginBottom:0 }} />
-            <Input label={i===0?"Salario diario $":""} type="number" value={e.salarioDiario} onChange={ev=>updEmpleado(i,"salarioDiario",ev.target.value)} placeholder="331" style={{ marginBottom:0 }} />
-            <button onClick={()=>delEmpleado(i)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"10px 12px", fontFamily:"inherit" }}>✕</button>
+          <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr auto",gap:10,marginBottom:10,alignItems:"end"}}>
+            <Input label={i===0?"Nombre":""} value={e.nombre} onChange={ev=>updEmp(i,"nombre",ev.target.value)} placeholder="Nombre del empleado" style={{marginBottom:0}}/>
+            <Input label={i===0?"Días trabajados":""} type="number" value={e.diasTrabajados} onChange={ev=>updEmp(i,"diasTrabajados",ev.target.value)} style={{marginBottom:0}}/>
+            <Input label={i===0?"Salario diario $":""} type="number" value={e.salarioDiario} onChange={ev=>updEmp(i,"salarioDiario",ev.target.value)} placeholder="331" style={{marginBottom:0}}/>
+            <button onClick={()=>delEmp(i)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:8,color:C.red,cursor:"pointer",padding:"10px 12px",fontFamily:"inherit"}}>✕</button>
           </div>
         ))}
       </div>
-      <Btn onClick={calcular}>Calcular PTU ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20 }}>
-          <Card style={{ padding:0, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", background:C.navy, color:C.white, fontWeight:700 }}>
-              Distribución PTU — 10% de ${fmt(r.totalPTU)}
-            </div>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead>
-                <tr style={{ background:C.panel }}>
-                  {["Empleado","PTU por días","PTU por salario","TOTAL"].map(h=>(
-                    <th key={h} style={{ padding:"8px 12px", color:C.muted, fontSize:11, fontWeight:700, textAlign:"right", textTransform:"uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {r.resultados.map((e,i)=>(
-                  <tr key={i} style={{ background: i%2===0?C.panel:"white" }}>
-                    <td style={{ padding:"10px 12px", color:C.text, fontWeight:600, fontSize:13 }}>{e.nombre||`Empleado ${i+1}`}</td>
-                    <td style={{ padding:"10px 12px", color:C.accent, textAlign:"right", fontWeight:600 }}>${fmt(e.ptu_dias)}</td>
-                    <td style={{ padding:"10px 12px", color:C.accent, textAlign:"right", fontWeight:600 }}>${fmt(e.ptu_sal)}</td>
-                    <td style={{ padding:"10px 12px", color:C.green, textAlign:"right", fontWeight:800 }}>${fmt(e.total)}</td>
-                  </tr>
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        <TarjetasResumen items={[
+          {l:"Utilidad fiscal",v:`$${fmt(r.utilidad)}`,c:C.navy,bg:C.navyDim},
+          {l:"PTU a repartir (10%)",v:`$${fmt(r.ptu)}`,c:C.green,bg:C.greenBg,grande:true},
+          {l:"Empleados",v:`${r.resultados.length}`,c:C.accent,bg:C.navyDim},
+        ]}/>
+        <Card style={{padding:0,overflow:"hidden",marginTop:16}}>
+          <div style={{padding:"10px 16px",background:C.navy,color:C.white,fontWeight:700,fontSize:13}}>Distribución PTU por empleado</div>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Empleado","PTU por días","PTU por salario","TOTAL"].map(h=>(
+                  <th key={h} style={{padding:"8px 12px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"right",textTransform:"uppercase"}}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </Card>
-        </div>
-      )}
+              </tr>
+            </thead>
+            <tbody>
+              {r.resultados.map((e,i)=>(
+                <tr key={i} style={{background:i%2===0?C.panel:"white"}}>
+                  <td style={{padding:"10px 12px",color:C.text,fontWeight:600,fontSize:13}}>{e.nombre||`Empleado ${i+1}`}</td>
+                  <td style={{padding:"10px 12px",color:C.accent,textAlign:"right",fontWeight:600}}>${fmt(e.ptu_d)}</td>
+                  <td style={{padding:"10px 12px",color:C.accent,textAlign:"right",fontWeight:600}}>${fmt(e.ptu_s)}</td>
+                  <td style={{padding:"10px 12px",color:C.green,textAlign:"right",fontWeight:800}}>${fmt(e.total)}</td>
+                </tr>
+              ))}
+              <tr style={{background:C.greenBg}}>
+                <td colSpan={3} style={{padding:"12px 16px",color:C.green,fontWeight:800,fontSize:14}}>TOTAL PTU REPARTIDO</td>
+                <td style={{padding:"12px 16px",color:C.green,fontWeight:800,fontSize:18,textAlign:"right"}}>${fmt(r.ptu)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      </>)}
     </div>
   );
 }
 
+// ── PRIMA ANTIGÜEDAD ──
 function CalcPrimaAntiguedad() {
-  const [sd, setSd] = useState("");
-  const [fi, setFi] = useState("");
-  const [ff, setFf] = useState(new Date().toISOString().slice(0,10));
-  const [r, setR] = useState(null);
-  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
+  const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
+  const [r,setR]=useState(null); const [gen,setGen]=useState(false);
+  const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  const calcular = () => {
-    const salDiario = parseFloat(sd);
-    if (!salDiario || !fi) return;
-    const inicio = new Date(fi), fin = new Date(ff);
-    const dias = Math.floor((fin - inicio) / (1000*60*60*24));
-    const anios = Math.floor(dias / 365);
-    // Tope: 2 UMAs diarias
-    const tope = UMA_DIARIA_2026 * 2;
-    const baseCalculo = Math.min(salDiario, tope);
-    const prima = anios * 12 * baseCalculo;
-    setR({ anios, dias, salDiario, tope, baseCalculo, prima });
+  const calcular=()=>{
+    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const inicio=new Date(fi),fin=new Date(ff);
+    const anios=Math.floor(Math.floor((fin-inicio)/(1000*60*60*24))/365);
+    const tope=UMA_DIARIA_2026*2; const base=Math.min(salDiario,tope);
+    const prima=anios*12*base;
+    setR({anios,salDiario,tope,base,prima,fi,ff,excede:salDiario>tope});
+  };
+
+  const descargar=async()=>{
+    if(!r) return; setGen(true);
+    await generarPDFLaboral({ titulo:"Prima de Antiguedad", subtitulo:"Art. 162 LFT - 12 dias por ano trabajado", trabajador, empresa, filas:[
+      {tipo:"section",label:"DATOS GENERALES"},
+      {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de calculo",valor:r.ff},
+      {label:"Anos de antiguedad",valor:`${r.anios} anos`},{label:"Salario diario real",valor:r.salDiario},
+      {tipo:"section",label:"CALCULO ART. 162 LFT"},
+      {label:"Tope maximo (2 UMAs diarias 2026)",valor:r.tope},
+      {label:"Salario base de calculo",valor:r.base},
+      {label:`Formula: ${r.anios} x 12 dias x $${fmt(r.base)}`,valor:r.prima},
+      ...(r.excede?[{label:"Nota: Salario topado por Art. 162 LFT",valor:"Aplicado"}]:[]),
+      {tipo:"total",label:"PRIMA DE ANTIGUEDAD",valor:r.prima},
+    ]}); setGen(false);
   };
 
   return (
     <div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, marginBottom:16 }}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331" />
-        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)} />
-        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)} />
+      <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
+        <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
       </div>
-      <div style={{ background:C.navyDim, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.muted, marginBottom:16 }}>
-        Art. 162 LFT — 12 días de salario por año trabajado. Tope máximo: 2 UMAs diarias (${fmt(UMA_DIARIA_2026 * 2)}/día en 2026).
+      <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.muted,marginBottom:16}}>
+        Art. 162 LFT — 12 días por año. Tope: 2 UMAs diarias (${fmt(UMA_DIARIA_2026*2)}/día en 2026).
       </div>
-      <Btn onClick={calcular}>Calcular prima ▶</Btn>
-      {r && (
-        <div style={{ marginTop:20, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
-          {[
-            { l:"Años de antigüedad", v:`${r.anios} años`, c:C.navy, bg:C.navyDim },
-            { l:"Salario base de cálculo", v:`$${fmt(r.baseCalculo)}/día`, c:r.salDiario > r.tope ? C.red : C.green, bg: r.salDiario > r.tope ? C.redBg : C.greenBg },
-            { l:"Prima de antigüedad", v:`$${fmt(r.prima)}`, c:C.green, bg:C.greenBg },
-          ].map(x=>(
-            <div key={x.l} style={{ background:x.bg, border:`1.5px solid ${x.c}22`, borderRadius:12, padding:16, textAlign:"center" }}>
-              <div style={{ color:x.c, fontSize:20, fontWeight:800 }}>{x.v}</div>
-              <div style={{ color:x.c, fontSize:11, marginTop:4, opacity:0.8 }}>{x.l}</div>
-            </div>
-          ))}
-          {r.salDiario > r.tope && (
-            <div style={{ gridColumn:"1/-1", background:C.yellowBg, border:`1px solid ${C.yellow}44`, borderRadius:10, padding:"10px 14px", fontSize:12, color:C.yellow, fontWeight:600 }}>
-              ⚠️ El salario diario (${fmt(r.salDiario)}) supera el tope de 2 UMAs (${fmt(r.tope)}). Se usa el tope para el cálculo.
-            </div>
-          )}
-        </div>
-      )}
+      <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
+      {r && (<>
+        {r.excede && <div style={{background:C.yellowBg,border:`1px solid ${C.yellow}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.yellow,fontWeight:600,marginBottom:12}}>⚠️ Salario (${fmt(r.salDiario)}) supera 2 UMAs (${fmt(r.tope)}). Se aplica el tope.</div>}
+        <TarjetasResumen items={[
+          {l:"Años de antigüedad",v:`${r.anios} años`,c:C.navy,bg:C.navyDim},
+          {l:"Salario base de cálculo",v:`$${fmt(r.base)}/día`,c:r.excede?C.red:C.green,bg:r.excede?C.redBg:C.greenBg},
+          {l:"PRIMA DE ANTIGÜEDAD",v:`$${fmt(r.prima)}`,c:C.green,bg:C.greenBg,grande:true},
+        ]}/>
+        <TablaDesglose total={r.prima} labelTotal="PRIMA DE ANTIGÜEDAD" filas={[
+          ["Años de antigüedad",`${r.anios} años`],["Salario diario real",`$${fmt(r.salDiario)}`],
+          ["Tope máximo (2 UMAs 2026)",`$${fmt(r.tope)}/día`],["Salario base de cálculo",`$${fmt(r.base)}/día`],
+          ["Días por año (Art. 162 LFT)","12 días"],
+          [`Fórmula: ${r.anios} × 12 × $${fmt(r.base)}`,`$${fmt(r.prima)}`],
+        ]}/>
+      </>)}
     </div>
   );
 }
