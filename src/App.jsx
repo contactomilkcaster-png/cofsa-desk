@@ -276,7 +276,7 @@ function Sidebar({ active, onNav, user, onLogout, notifCount }) {
       {/* Nav */}
       <nav style={{ flex:1, padding:"16px 12px" }}>
         <div style={{ color:"rgba(255,255,255,0.3)", fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", padding:"0 8px", marginBottom:10 }}>Módulos</div>
-        {NAV.map(n => (
+        {[...NAV, ...(["ricardo.cerda@cofsamty.com","cofsamty@gmail.com"].includes(user.email)?[{id:"cotizaciones",icon:"📝",label:"Cotizaciones"}]:[])].map(n => (
           <div key={n.id} className="nav-item" onClick={()=>onNav(n.id)} style={{
             display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
             borderRadius:10, cursor:"pointer", marginBottom:3,
@@ -2719,6 +2719,436 @@ function AsistenteModule({ user }) {
   );
 }
 
+// ── COTIZACIONES ──────────────────────────────────────────────────────────
+
+const USUARIOS_COTIZACIONES = ["ricardo.cerda@cofsamty.com","cofsamty@gmail.com"];
+
+const CATALOGO_SERVICIOS = {
+  "Contabilidad Mensual": [
+    { nombre:"Contabilidad persona moral (régimen general)", desc:"Registro contable mensual, balanza de comprobación, estados financieros y conciliación bancaria para persona moral." },
+    { nombre:"Contabilidad persona física (actividad empresarial)", desc:"Registro contable mensual, libro de ingresos y egresos, conciliación bancaria para persona física con actividad empresarial." },
+    { nombre:"Contabilidad RESICO", desc:"Registro y control contable bajo el Régimen Simplificado de Confianza para personas físicas." },
+    { nombre:"Revisión y corrección de contabilidad", desc:"Revisión de registros contables previos, detección y corrección de errores, actualización de balanzas." },
+  ],
+  "Declaraciones Fiscales": [
+    { nombre:"Declaración mensual ISR e IVA (PM)", desc:"Presentación de pago provisional de ISR e IVA mensual para persona moral ante el SAT." },
+    { nombre:"Declaración mensual ISR e IVA (PF)", desc:"Presentación de pago provisional de ISR e IVA mensual para persona física con actividad empresarial." },
+    { nombre:"DIOT mensual", desc:"Elaboración y presentación de la Declaración Informativa de Operaciones con Terceros (DIOT)." },
+    { nombre:"Declaración anual personas morales", desc:"Elaboración y presentación de la declaración anual del ejercicio fiscal para persona moral." },
+    { nombre:"Declaración anual personas físicas", desc:"Elaboración y presentación de la declaración anual del ejercicio fiscal para persona física." },
+    { nombre:"Declaración complementaria / corrección", desc:"Presentación de declaración complementaria para corregir errores u omisiones en declaraciones previas." },
+  ],
+  "Nómina y IMSS": [
+    { nombre:"Procesamiento de nómina mensual (hasta 5 empleados)", desc:"Cálculo de nómina, retenciones de ISR, cuotas IMSS e INFONAVIT para empresas con hasta 5 trabajadores." },
+    { nombre:"Procesamiento de nómina mensual (6-15 empleados)", desc:"Cálculo de nómina, retenciones de ISR, cuotas IMSS e INFONAVIT para empresas de 6 a 15 trabajadores." },
+    { nombre:"Procesamiento de nómina mensual (16+ empleados)", desc:"Cálculo de nómina, retenciones de ISR, cuotas IMSS e INFONAVIT para empresas con más de 15 trabajadores." },
+    { nombre:"Pago bimestral IMSS/INFONAVIT", desc:"Determinación y presentación del pago bimestral de cuotas al IMSS e INFONAVIT (SUA)." },
+    { nombre:"Alta/baja de trabajadores ante IMSS", desc:"Trámite de alta o baja de trabajadores en el IMSS y INFONAVIT." },
+    { nombre:"Timbrado de CFDI de nómina", desc:"Emisión y timbrado de recibos de nómina (CFDI 4.0) para cada trabajador." },
+  ],
+  "Constitución de Empresas": [
+    { nombre:"Constitución de Sociedad Anónima de Capital Variable (S.A. de C.V.)", desc:"Elaboración de acta constitutiva, trámite ante notario, alta ante SAT y registro en IMSS/INFONAVIT." },
+    { nombre:"Constitución de Sociedad de Responsabilidad Limitada (S. de R.L.)", desc:"Elaboración de acta constitutiva, trámite ante notario, alta ante SAT." },
+    { nombre:"Constitución de empresa unipersonal (PF con actividad empresarial)", desc:"Alta en RFC bajo régimen de actividad empresarial, apertura de contabilidad." },
+    { nombre:"Cambio de régimen fiscal", desc:"Gestión del cambio de régimen fiscal ante el SAT, actualización de obligaciones." },
+  ],
+  "Auditoría y Revisión Fiscal": [
+    { nombre:"Revisión preventiva fiscal", desc:"Análisis del cumplimiento de obligaciones fiscales, detección de contingencias y áreas de riesgo." },
+    { nombre:"Auditoría contable interna", desc:"Revisión integral de registros contables, conciliaciones y estados financieros del ejercicio." },
+    { nombre:"Atención a requerimientos del SAT", desc:"Representación y atención a notificaciones, requerimientos o visitas domiciliarias del SAT." },
+    { nombre:"Opinión de cumplimiento de obligaciones fiscales", desc:"Gestión y obtención de la opinión de cumplimiento ante el SAT." },
+  ],
+  "Trámites SAT": [
+    { nombre:"Obtención / renovación de e.firma", desc:"Cita y asistencia para obtención o renovación de la firma electrónica avanzada (e.firma) ante el SAT." },
+    { nombre:"Alta en RFC persona física", desc:"Trámite de alta en el Registro Federal de Contribuyentes para persona física." },
+    { nombre:"Alta en RFC persona moral", desc:"Trámite de alta en el Registro Federal de Contribuyentes para persona moral." },
+    { nombre:"Actualización de obligaciones fiscales", desc:"Modificación de régimen fiscal, actividades económicas u obligaciones ante el SAT." },
+    { nombre:"Aclaración de buzón tributario", desc:"Atención y resolución de notificaciones, cartas invitación y requerimientos del buzón tributario." },
+    { nombre:"Cancelación de sellos digitales / CSD", desc:"Gestión del proceso de cancelación o renovación de Certificados de Sello Digital." },
+  ],
+  "Consultoría Administrativa": [
+    { nombre:"Consultoría fiscal mensual", desc:"Asesoría recurrente en materia fiscal, respuesta a consultas sobre obligaciones, deducciones y estrategias." },
+    { nombre:"Planeación fiscal", desc:"Diseño de estrategias legales para optimizar la carga fiscal de la empresa o persona física." },
+    { nombre:"Diagnóstico financiero", desc:"Análisis de estados financieros, indicadores de rentabilidad y recomendaciones de mejora." },
+    { nombre:"Asesoría en apertura de negocio", desc:"Orientación integral para la formalización y arranque de un nuevo negocio: régimen, obligaciones, permisos." },
+  ],
+  "Recursos Humanos": [
+    { nombre:"Elaboración de contratos laborales", desc:"Redacción de contratos individuales de trabajo conforme a la LFT vigente." },
+    { nombre:"Reglamento interior de trabajo", desc:"Elaboración del reglamento interior de trabajo y registro ante la STPS." },
+    { nombre:"Cálculo de liquidaciones y finiquitos", desc:"Determinación de importes de finiquito, liquidación y prima de antigüedad conforme a la LFT." },
+    { nombre:"Asesoría en relaciones laborales", desc:"Orientación en conflictos laborales, rescisiones, demandas y conciliaciones ante el CFCRL." },
+  ],
+};
+
+const SLOGAN_DEFAULT = "Nos comprometemos a brindarle un servicio de calidad, con profesionalismo y puntualidad. Esta cotización tiene una vigencia de 30 días naturales a partir de su fecha de emisión.";
+
+function CotizacionesModule({ user }) {
+  const [vista, setVista] = useState("historial"); // historial | nueva | detalle
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [cotActual, setCotActual] = useState(null);
+  const [notif, setNotif] = useState(null);
+  const [gen, setGen] = useState(false);
+
+  // Form nueva cotización
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [clienteEmpresa, setClienteEmpresa] = useState("");
+  const [clienteEmail, setClienteEmail] = useState("");
+  const [clienteTel, setClienteTel] = useState("");
+  const [notas, setNotas] = useState(SLOGAN_DEFAULT);
+  const [servicios, setServicios] = useState([]);
+  const [catAbierta, setCatAbierta] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const subtotal = servicios.reduce((s,sv)=>s+(parseFloat(sv.precio)||0),0);
+  const iva = subtotal * 0.16;
+  const total = subtotal + iva;
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("cotizaciones").select("*").order("created_at",{ascending:false});
+    setCotizaciones(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = (msg) => { setNotif(msg); setTimeout(()=>setNotif(null),3000); };
+
+  const agregarServicio = (svc) => {
+    if (servicios.find(s=>s.nombre===svc.nombre)) return;
+    setServicios(p=>[...p,{...svc, precio:""}]);
+  };
+  const removerServicio = (nombre) => setServicios(p=>p.filter(s=>s.nombre!==nombre));
+  const setPrecio = (nombre, val) => setServicios(p=>p.map(s=>s.nombre===nombre?{...s,precio:val}:s));
+
+  const generarFolio = () => `COT-${new Date().getFullYear()}-${String(cotizaciones.length+1).padStart(4,"0")}`;
+
+  const guardar = async (estatus="borrador") => {
+    if (!clienteNombre) return;
+    setSaving(true);
+    const folio = generarFolio();
+    const { data, error } = await supabase.from("cotizaciones").insert([{
+      folio, cliente_nombre:clienteNombre, cliente_empresa:clienteEmpresa,
+      cliente_email:clienteEmail, cliente_telefono:clienteTel,
+      servicios, subtotal, iva, total, notas, estatus, created_by:user.id,
+    }]).select().single();
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar"); return; }
+    showNotif("✅ Cotización guardada");
+    await load();
+    resetForm();
+    setVista("historial");
+  };
+
+  const resetForm = () => {
+    setClienteNombre(""); setClienteEmpresa(""); setClienteEmail(""); setClienteTel("");
+    setNotas(SLOGAN_DEFAULT); setServicios([]); setCatAbierta(null);
+  };
+
+  const eliminar = async (id) => {
+    await supabase.from("cotizaciones").delete().eq("id",id);
+    showNotif("🗑️ Cotización eliminada");
+    load();
+  };
+
+  const descargarPDF = async (cot) => {
+    setGen(true);
+    try {
+      if (!window.jspdf) {
+        await new Promise((resolve,reject)=>{
+          const s=document.createElement("script");
+          s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+          s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+        });
+      }
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+      const W=216,M=18,TW=W-M*2;
+      let y=18;
+
+      // Header
+      try { doc.addImage(LOGO_B64,"JPEG",M,y,22,22); } catch(e){}
+      doc.setFontSize(20); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("CIA COFSA SERVICE", M+26, y+9);
+      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+      doc.text("Consultoria Contable Fiscal y Administrativa", M+26, y+15);
+      doc.text(`Fecha: ${new Date(cot.created_at).toLocaleDateString("es-MX",{year:"numeric",month:"long",day:"numeric"})}`, M+26, y+20);
+      doc.text(`Folio: ${cot.folio}`, W-M, y+9, {align:"right"});
+      doc.setTextColor(27,42,74); doc.setFontSize(9); doc.setFont("helvetica","bold");
+      doc.text(`Estatus: ${cot.estatus.toUpperCase()}`, W-M, y+15, {align:"right"});
+      y+=28; doc.setDrawColor(27,42,74); doc.setLineWidth(0.8); doc.line(M,y,W-M,y); y+=8;
+
+      // Título
+      doc.setFontSize(16); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("COTIZACION DE SERVICIOS", M, y); y+=10;
+
+      // Datos cliente
+      doc.setFillColor(238,242,251); doc.roundedRect(M,y,TW,22,2,2,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(27,42,74);
+      doc.text("DATOS DEL CLIENTE", M+4, y+6);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(30,41,59);
+      if (cot.cliente_nombre) doc.text(`Nombre: ${cot.cliente_nombre}`, M+4, y+12);
+      if (cot.cliente_empresa) doc.text(`Empresa: ${cot.cliente_empresa}`, M+4, y+17);
+      if (cot.cliente_email) doc.text(`Email: ${cot.cliente_email}`, M+TW/2+4, y+12);
+      if (cot.cliente_telefono) doc.text(`Tel: ${cot.cliente_telefono}`, M+TW/2+4, y+17);
+      y+=28;
+
+      // Servicios
+      doc.setFillColor(27,42,74); doc.rect(M,y,TW,7,"F");
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.text("SERVICIO / DESCRIPCION", M+3, y+5);
+      doc.text("IMPORTE", W-M-3, y+5, {align:"right"}); y+=7;
+
+      const svcs = typeof cot.servicios === "string" ? JSON.parse(cot.servicios) : cot.servicios;
+      svcs.forEach((s,i)=>{
+        if(y>240){doc.addPage();y=18;}
+        const precio=parseFloat(s.precio)||0;
+        const lineH = s.desc ? 14 : 8;
+        doc.setFillColor(i%2===0?248:255,i%2===0?249:255,i%2===0?252:255);
+        doc.rect(M,y,TW,lineH,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(27,42,74);
+        doc.text(s.nombre, M+3, y+5);
+        if(s.desc){
+          doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+          const descLines = doc.splitTextToSize(s.desc, TW-50);
+          doc.text(descLines[0]||"", M+3, y+10);
+        }
+        doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(27,42,74);
+        doc.text(`$${fmt(precio)}`, W-M-3, y+5, {align:"right"});
+        doc.setDrawColor(210,218,232); doc.setLineWidth(0.1); doc.rect(M,y,TW,lineH,"S");
+        y+=lineH;
+      });
+
+      // Totales
+      y+=4;
+      const totBox = [[`Subtotal`, `$${fmt(cot.subtotal)}`],[`IVA (16%)`,`$${fmt(cot.iva)}`]];
+      totBox.forEach(([k,v])=>{
+        doc.setFillColor(248,249,252); doc.rect(M+TW-80,y,80,7,"F");
+        doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(30,41,59);
+        doc.text(k, M+TW-77, y+5);
+        doc.setFont("helvetica","bold"); doc.text(v, W-M-3, y+5, {align:"right"});
+        doc.setDrawColor(210,218,232); doc.setLineWidth(0.1); doc.rect(M+TW-80,y,80,7,"S");
+        y+=7;
+      });
+      doc.setFillColor(27,42,74); doc.rect(M+TW-80,y,80,9,"F");
+      doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      doc.text("TOTAL", M+TW-77, y+6);
+      doc.text(`$${fmt(cot.total)}`, W-M-3, y+6, {align:"right"}); y+=13;
+
+      // Notas / Slogan
+      if(cot.notas){
+        y+=4;
+        doc.setFillColor(255,251,235); doc.roundedRect(M,y,TW,20,2,2,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(180,100,0);
+        doc.text("CONDICIONES Y VIGENCIA", M+4, y+6);
+        doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(80,60,0);
+        const notasLines = doc.splitTextToSize(cot.notas, TW-8);
+        notasLines.slice(0,3).forEach((line,i)=>doc.text(line, M+4, y+11+(i*4)));
+        y+=24;
+      }
+
+      // Firma
+      y+=6;
+      doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+      doc.line(M, y+15, M+60, y+15); doc.line(M+TW-60, y+15, M+TW, y+15);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("Firma del cliente / Aceptación", M, y+19);
+      doc.text("CIA COFSA SERVICE", M+TW-60, y+19);
+
+      // Footer
+      y+=28; doc.setDrawColor(27,42,74); doc.setLineWidth(0.4); doc.line(M,y,W-M,y); y+=5;
+      doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("CIA COFSA SERVICE — Consultoria Contable Fiscal y Administrativa", M, y);
+      doc.text(`Folio: ${cot.folio}  |  ${new Date().toLocaleDateString("es-MX")}`, W-M, y, {align:"right"});
+
+      doc.save(`Cotizacion_${cot.folio}.pdf`);
+    } catch(e){ console.error(e); }
+    setGen(false);
+  };
+
+  const ESTATUS_COLOR = { borrador:C.muted, enviada:C.accent, aceptada:C.green, rechazada:C.red };
+
+  // ── VISTA HISTORIAL ──
+  if (vista==="historial") return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Cotizaciones</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{cotizaciones.length} cotizaciones registradas</p>
+        </div>
+        <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cotización</Btn>
+      </div>
+
+      {loading ? <Spinner/> : cotizaciones.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>📝</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin cotizaciones aún</div>
+          <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cotización</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Folio","Cliente","Empresa","Total","Estatus","Fecha","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase",letterSpacing:"0.05em"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cotizaciones.map((cot,i)=>(
+                <tr key={cot.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{cot.folio}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>{cot.cliente_nombre||"—"}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{cot.cliente_empresa||"—"}</td>
+                  <td style={{padding:"12px 14px",color:C.green,fontWeight:700,fontSize:13}}>${fmt(cot.total)}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <span style={{background:(ESTATUS_COLOR[cot.estatus]||C.muted)+"22",color:ESTATUS_COLOR[cot.estatus]||C.muted,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{cot.estatus}</span>
+                  </td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{new Date(cot.created_at).toLocaleDateString("es-MX")}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>eliminar(cot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+
+  // ── VISTA NUEVA COTIZACIÓN ──
+  return (
+    <div style={{padding:28,maxWidth:980}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <button onClick={()=>setVista("historial")} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
+        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Nueva Cotización</h1>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+        {/* Columna izquierda: datos + servicios seleccionados */}
+        <div>
+          {/* Datos del cliente */}
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📋 Datos del cliente</div>
+            <Input label="Nombre del cliente *" value={clienteNombre} onChange={e=>setClienteNombre(e.target.value)} placeholder="Ej: Juan García López"/>
+            <Input label="Empresa" value={clienteEmpresa} onChange={e=>setClienteEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A. de C.V."/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Input label="Email" value={clienteEmail} onChange={e=>setClienteEmail(e.target.value)} placeholder="correo@empresa.com"/>
+              <Input label="Teléfono" value={clienteTel} onChange={e=>setClienteTel(e.target.value)} placeholder="81 1234 5678"/>
+            </div>
+          </Card>
+
+          {/* Servicios seleccionados */}
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>🧾 Servicios seleccionados ({servicios.length})</div>
+            {servicios.length===0 ? (
+              <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Selecciona servicios del catálogo →</div>
+            ) : (
+              <div>
+                {servicios.map((s,i)=>(
+                  <div key={s.nombre} style={{background:C.panel,borderRadius:10,padding:12,marginBottom:8,border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                      <div style={{color:C.navy,fontWeight:600,fontSize:13,flex:1,lineHeight:1.4}}>{s.nombre}</div>
+                      <button onClick={()=>removerServicio(s.nombre)} style={{background:C.redBg,border:"none",borderRadius:6,color:C.red,cursor:"pointer",padding:"3px 8px",fontSize:11,fontFamily:"inherit",flexShrink:0}}>✕</button>
+                    </div>
+                    <div style={{color:C.muted,fontSize:11,marginBottom:8,lineHeight:1.5}}>{s.desc}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{color:C.muted,fontSize:12}}>$</span>
+                      <input type="number" value={s.precio} onChange={e=>setPrecio(s.nombre,e.target.value)} placeholder="0.00"
+                        style={{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                      <span style={{color:C.muted,fontSize:11}}>MXN</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Totales */}
+          {servicios.length>0 && (
+            <Card style={{marginBottom:16}}>
+              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>💰 Resumen</div>
+              {[["Subtotal",`$${fmt(subtotal)}`],["IVA (16%)",`$${fmt(iva)}`]].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{color:C.muted,fontSize:13}}>{k}</span>
+                  <span style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</span>
+                </div>
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0",marginTop:4}}>
+                <span style={{color:C.navy,fontWeight:800,fontSize:16}}>TOTAL</span>
+                <span style={{color:C.green,fontWeight:800,fontSize:20}}>${fmt(total)}</span>
+              </div>
+            </Card>
+          )}
+
+          {/* Notas / Slogan */}
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>📝 Condiciones y vigencia</div>
+            <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={4}
+              style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
+          </Card>
+
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteNombre||servicios.length===0} variant="ghost">Guardar borrador</Btn>
+            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||servicios.length===0}>💾 Guardar y enviar</Btn>
+          </div>
+        </div>
+
+        {/* Columna derecha: catálogo */}
+        <div>
+          <Card>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📚 Catálogo de servicios</div>
+            {Object.entries(CATALOGO_SERVICIOS).map(([cat,items])=>(
+              <div key={cat} style={{marginBottom:6}}>
+                <button onClick={()=>setCatAbierta(catAbierta===cat?null:cat)} style={{
+                  width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",
+                  background:catAbierta===cat?C.navy:C.panel,border:`1px solid ${catAbierta===cat?C.navy:C.border}`,
+                  borderRadius:10,padding:"10px 14px",cursor:"pointer",fontFamily:"inherit",
+                  color:catAbierta===cat?C.white:C.navy,fontWeight:700,fontSize:13,transition:"all 0.15s",
+                }}>
+                  {cat}
+                  <span style={{fontSize:16}}>{catAbierta===cat?"▲":"▼"}</span>
+                </button>
+                {catAbierta===cat && (
+                  <div style={{background:C.panel,border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+                    {items.map(svc=>{
+                      const yaAgregado=servicios.find(s=>s.nombre===svc.nombre);
+                      return (
+                        <div key={svc.nombre} style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"flex-start",gap:10}}>
+                          <div style={{flex:1}}>
+                            <div style={{color:C.navy,fontWeight:600,fontSize:12,marginBottom:3}}>{svc.nombre}</div>
+                            <div style={{color:C.muted,fontSize:11,lineHeight:1.5}}>{svc.desc}</div>
+                          </div>
+                          <button onClick={()=>yaAgregado?removerServicio(svc.nombre):agregarServicio(svc)} style={{
+                            background:yaAgregado?C.redBg:C.greenBg,border:`1px solid ${yaAgregado?C.red:C.green}44`,
+                            borderRadius:7,color:yaAgregado?C.red:C.green,cursor:"pointer",padding:"5px 12px",
+                            fontSize:11,fontWeight:700,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap",
+                          }}>{yaAgregado?"✕ Quitar":"+ Agregar"}</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── APP ROOT ───────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
@@ -2775,6 +3205,7 @@ export default function App() {
     chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} />,
     nomina: <CalculosModule />,
+    cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
   };
 
