@@ -2053,13 +2053,16 @@ function BotonesCalc({ onCalc, onPDF, genPDF, resultado }) {
 
 // ── VACACIONES ──
 function CalcVacaciones() {
+  const [tipoSal,setTipoSal]=useState("diario");
   const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
   const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
   const [r,setR]=useState(null); const [gen,setGen]=useState(false);
   const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const toDaily=v=>tipoSal==="semanal"?v/7:tipoSal==="mensual"?v/30.4:v;
 
   const calcular=()=>{
-    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const salInput=parseFloat(sd); if(!salInput||!fi) return;
+    const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios=dias_total/365; const anios_c=Math.floor(anios);
@@ -2068,7 +2071,7 @@ function CalcVacaciones() {
     const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
     const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
     const prima_anual=diasVacaciones(anios_c)*salDiario*0.25;
-    setR({anios:anios.toFixed(2),anios_c,dias_vac,vac_prop,importe_vac,prima_vac,prima_anual,salDiario,fi,ff,total:importe_vac+prima_vac});
+    setR({anios:anios.toFixed(2),anios_c,dias_vac,vac_prop,importe_vac,prima_vac,prima_anual,salDiario,salInput,tipoSal,fi,ff,total:importe_vac+prima_vac});
   };
 
   const descargar=async()=>{
@@ -2076,7 +2079,8 @@ function CalcVacaciones() {
     await generarPDFLaboral({ titulo:"Calculo de Vacaciones", subtitulo:"Art. 76 LFT 2026 - Prima vacacional 25%", trabajador, empresa, filas:[
       {tipo:"section",label:"DATOS GENERALES"},
       {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de calculo",valor:r.ff},
-      {label:"Salario diario",valor:r.salDiario},{label:"Antiguedad",valor:`${r.anios} anos`},
+      {label:`Sueldo ${r.tipoSal}`,valor:r.salInput},{label:"Salario diario equivalente",valor:r.salDiario},
+      {label:"Antiguedad",valor:`${r.anios} anos`},
       {tipo:"section",label:"VACACIONES PROPORCIONALES"},
       {label:"Dias proporcionales correspondientes",valor:`${r.vac_prop} dias`},
       {label:"Importe vacaciones prop.",valor:r.importe_vac},
@@ -2088,11 +2092,20 @@ function CalcVacaciones() {
   return (
     <div>
       <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de sueldo</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["diario","Diario"],["semanal","Semanal"],["mensual","Mensual"]].map(([v,l])=>(
+            <button key={v} onClick={()=>{setTipoSal(v);setSd("");setR(null);}} style={{padding:"7px 16px",borderRadius:8,border:`1.5px solid ${tipoSal===v?C.navy:C.border}`,background:tipoSal===v?C.navy:"transparent",color:tipoSal===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
+          ))}
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label={`Sueldo ${tipoSal} $`} type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder={tipoSal==="semanal"?"Ej: 2317":tipoSal==="mensual"?"Ej: 9930":"Ej: 331"}/>
         <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
         <Input label="Fecha de cálculo" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
       </div>
+      {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
         <TarjetasResumen items={[
@@ -2105,7 +2118,8 @@ function CalcVacaciones() {
         ]}/>
         <TablaDesglose total={r.total} labelTotal="TOTAL A PAGAR" filas={[
           ["Fecha de ingreso",r.fi],["Fecha de cálculo",r.ff],["Antigüedad",`${r.anios} años`],
-          ["Salario diario",`$${fmt(r.salDiario)}`],["Días vacaciones año completo",`${r.dias_vac} días`],
+          [`Sueldo ${r.tipoSal}`,`$${fmt(r.salInput)}`],["Salario diario equivalente",`$${fmt(r.salDiario)}`],
+          ["Días vacaciones año completo",`${r.dias_vac} días`],
           ["Días proporcionales (año en curso)",`${r.vac_prop} días`],
           ["Importe vacaciones proporcionales",`$${fmt(r.importe_vac)}`],
           ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
@@ -2117,17 +2131,20 @@ function CalcVacaciones() {
 
 // ── AGUINALDO ──
 function CalcAguinaldo() {
+  const [tipoSal,setTipoSal]=useState("diario");
   const [sd,setSd]=useState(""); const [fi,setFi]=useState("");
   const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
   const [r,setR]=useState(null); const [gen,setGen]=useState(false);
   const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const toDaily=v=>tipoSal==="semanal"?v/7:tipoSal==="mensual"?v/30.4:v;
 
   const calcular=()=>{
-    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const salInput=parseFloat(sd); if(!salInput||!fi) return;
+    const salDiario=toDaily(salInput);
     const inicio=new Date(fi); const dic=new Date(new Date().getFullYear(),11,20);
     const dias_anio=Math.min(Math.floor((dic-inicio)/(1000*60*60*24)),365);
     const prop=(dias_anio/365)*15*salDiario; const completo=15*salDiario;
-    setR({dias_anio,prop,completo,salDiario,fi,anio:new Date().getFullYear()});
+    setR({dias_anio,prop,completo,salDiario,salInput,tipoSal,fi,anio:new Date().getFullYear()});
   };
 
   const descargar=async()=>{
@@ -2135,9 +2152,10 @@ function CalcAguinaldo() {
     await generarPDFLaboral({ titulo:"Calculo de Aguinaldo", subtitulo:"Art. 87 LFT - Minimo 15 dias de salario", trabajador, empresa, filas:[
       {tipo:"section",label:"DATOS GENERALES"},
       {label:"Fecha de ingreso",valor:r.fi},{label:"Ejercicio",valor:String(r.anio)},
-      {label:"Salario diario",valor:r.salDiario},{label:"Dias trabajados en el ejercicio",valor:`${r.dias_anio} dias`},
+      {label:`Sueldo ${r.tipoSal}`,valor:r.salInput},{label:"Salario diario equivalente",valor:r.salDiario},
+      {label:"Dias trabajados en el ejercicio",valor:`${r.dias_anio} dias`},
       {tipo:"section",label:"CALCULO"},
-      {label:"Dias de aguinaldo minimo legal","valor":"15 dias"},{label:"Factor (dias/365)",valor:(r.dias_anio/365).toFixed(4)},
+      {label:"Dias de aguinaldo minimo legal",valor:"15 dias"},{label:"Factor (dias/365)",valor:(r.dias_anio/365).toFixed(4)},
       {label:"Aguinaldo proporcional",valor:r.prop},{label:"Aguinaldo ano completo (ref.)",valor:r.completo},
       {tipo:"total",label:"AGUINALDO A PAGAR",valor:r.prop},
     ]}); setGen(false);
@@ -2146,10 +2164,19 @@ function CalcAguinaldo() {
   return (
     <div>
       <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de sueldo</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["diario","Diario"],["semanal","Semanal"],["mensual","Mensual"]].map(([v,l])=>(
+            <button key={v} onClick={()=>{setTipoSal(v);setSd("");setR(null);}} style={{padding:"7px 16px",borderRadius:8,border:`1.5px solid ${tipoSal===v?C.navy:C.border}`,background:tipoSal===v?C.navy:"transparent",color:tipoSal===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
+          ))}
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label={`Sueldo ${tipoSal} $`} type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder={tipoSal==="semanal"?"Ej: 2317":tipoSal==="mensual"?"Ej: 9930":"Ej: 331"}/>
         <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
       </div>
+      {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.muted,marginBottom:16}}>Art. 87 LFT — Mínimo 15 días de salario. Cálculo al 20 de diciembre del año en curso.</div>
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
@@ -2159,7 +2186,8 @@ function CalcAguinaldo() {
           {l:"Aguinaldo año completo (ref.)",v:`$${fmt(r.completo)}`,c:C.accent,bg:C.navyDim},
         ]}/>
         <TablaDesglose total={r.prop} labelTotal="AGUINALDO A PAGAR" filas={[
-          ["Fecha de ingreso",r.fi],["Ejercicio",String(r.anio)],["Salario diario",`$${fmt(r.salDiario)}`],
+          ["Fecha de ingreso",r.fi],["Ejercicio",String(r.anio)],
+          [`Sueldo ${r.tipoSal}`,`$${fmt(r.salInput)}`],["Salario diario equivalente",`$${fmt(r.salDiario)}`],
           ["Días trabajados",`${r.dias_anio} días`],["Días mínimo legal","15 días"],
           ["Factor proporcional",(r.dias_anio/365).toFixed(4)],
           ["Aguinaldo año completo (ref.)",`$${fmt(r.completo)}`],
@@ -2171,13 +2199,16 @@ function CalcAguinaldo() {
 
 // ── FINIQUITO ──
 function CalcFiniquito() {
+  const [tipoSal,setTipoSal]=useState("diario");
   const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
   const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
   const [r,setR]=useState(null); const [gen,setGen]=useState(false);
   const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const toDaily=v=>tipoSal==="semanal"?v/7:tipoSal==="mensual"?v/30.4:v;
 
   const calcular=()=>{
-    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const salInput=parseFloat(sd); if(!salInput||!fi) return;
+    const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
@@ -2188,7 +2219,7 @@ function CalcFiniquito() {
     const uma2=UMA_DIARIA_2026*2; const base_ant=Math.min(salDiario,uma2);
     const prima_ant=anios_c>=15?anios_c*12*base_ant:0;
     const total=importe_vac+prima_vac+aguinaldo+salarios_pend+prima_ant;
-    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,salarios_pend,dias_pend,prima_ant,total,salDiario,fi,ff});
+    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,salarios_pend,dias_pend,prima_ant,total,salDiario,salInput,tipoSal,fi,ff});
   };
 
   const descargar=async()=>{
@@ -2196,7 +2227,8 @@ function CalcFiniquito() {
     await generarPDFLaboral({ titulo:"Calculo de Finiquito", subtitulo:"Renuncia voluntaria - LFT 2026", trabajador, empresa, filas:[
       {tipo:"section",label:"DATOS GENERALES"},
       {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de baja",valor:r.ff},
-      {label:"Antiguedad",valor:`${r.anios_c} anos`},{label:"Salario diario",valor:r.salDiario},
+      {label:"Antiguedad",valor:`${r.anios_c} anos`},
+      {label:`Sueldo ${r.tipoSal}`,valor:r.salInput},{label:"Salario diario equivalente",valor:r.salDiario},
       {tipo:"section",label:"PARTES PROPORCIONALES"},
       {label:`Vacaciones prop. (${r.vac_prop} dias)`,valor:r.importe_vac},
       {label:"Prima vacacional (25%)",valor:r.prima_vac},
@@ -2211,11 +2243,20 @@ function CalcFiniquito() {
   return (
     <div>
       <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de sueldo</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["diario","Diario"],["semanal","Semanal"],["mensual","Mensual"]].map(([v,l])=>(
+            <button key={v} onClick={()=>{setTipoSal(v);setSd("");setR(null);}} style={{padding:"7px 16px",borderRadius:8,border:`1.5px solid ${tipoSal===v?C.navy:C.border}`,background:tipoSal===v?C.navy:"transparent",color:tipoSal===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
+          ))}
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label={`Sueldo ${tipoSal} $`} type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder={tipoSal==="semanal"?"Ej: 2317":tipoSal==="mensual"?"Ej: 9930":"Ej: 331"}/>
         <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
         <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
       </div>
+      {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
         <TarjetasResumen items={[
@@ -2228,6 +2269,7 @@ function CalcFiniquito() {
         ]}/>
         <TablaDesglose total={r.total} labelTotal="TOTAL FINIQUITO" filas={[
           ["Antigüedad",`${r.anios_c} años`],["Días en año en curso",`${r.dias_anio} días`],
+          [`Sueldo ${r.tipoSal}`,`$${fmt(r.salInput)}`],["Salario diario equivalente",`$${fmt(r.salDiario)}`],
           [`Vacaciones prop. (${r.vac_prop} días)`,`$${fmt(r.importe_vac)}`],
           ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
           ["Aguinaldo proporcional",`$${fmt(r.aguinaldo)}`],
@@ -2241,14 +2283,17 @@ function CalcFiniquito() {
 
 // ── LIQUIDACIÓN ──
 function CalcLiquidacion() {
+  const [tipoSal,setTipoSal]=useState("diario");
   const [sd,setSd]=useState(""); const [fi,setFi]=useState(""); const [ff,setFf]=useState(new Date().toISOString().slice(0,10));
   const [tipo,setTipo]=useState("injustificado");
   const [trabajador,setTrabajador]=useState(""); const [empresa,setEmpresa]=useState("");
   const [r,setR]=useState(null); const [gen,setGen]=useState(false);
   const fmt=n=>n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const toDaily=v=>tipoSal==="semanal"?v/7:tipoSal==="mensual"?v/30.4:v;
 
   const calcular=()=>{
-    const salDiario=parseFloat(sd); if(!salDiario||!fi) return;
+    const salInput=parseFloat(sd); if(!salInput||!fi) return;
+    const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
@@ -2260,7 +2305,7 @@ function CalcLiquidacion() {
     const tres_meses=tipo==="injustificado"?90*salDiario:0;
     const veinte_dias=tipo==="injustificado"?anios_c*20*salDiario:0;
     const total=importe_vac+prima_vac+aguinaldo+prima_ant+tres_meses+veinte_dias;
-    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,prima_ant,tres_meses,veinte_dias,total,salDiario,fi,ff,tipo});
+    setR({anios_c,dias_anio,vac_prop,importe_vac,prima_vac,aguinaldo,prima_ant,tres_meses,veinte_dias,total,salDiario,salInput,tipoSal,fi,ff,tipo});
   };
 
   const descargar=async()=>{
@@ -2270,7 +2315,8 @@ function CalcLiquidacion() {
       trabajador, empresa, filas:[
         {tipo:"section",label:"DATOS GENERALES"},
         {label:"Fecha de ingreso",valor:r.fi},{label:"Fecha de baja",valor:r.ff},
-        {label:"Antiguedad",valor:`${r.anios_c} anos`},{label:"Salario diario",valor:r.salDiario},
+        {label:"Antiguedad",valor:`${r.anios_c} anos`},
+        {label:`Sueldo ${r.tipoSal}`,valor:r.salInput},{label:"Salario diario equivalente",valor:r.salDiario},
         {tipo:"section",label:"PARTES PROPORCIONALES"},
         {label:`Vacaciones prop. (${r.vac_prop} dias)`,valor:r.importe_vac},
         {label:"Prima vacacional (25%)",valor:r.prima_vac},
@@ -2289,11 +2335,20 @@ function CalcLiquidacion() {
   return (
     <div>
       <CamposPersona trabajador={trabajador} setTrabajador={setTrabajador} empresa={empresa} setEmpresa={setEmpresa}/>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de sueldo</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["diario","Diario"],["semanal","Semanal"],["mensual","Mensual"]].map(([v,l])=>(
+            <button key={v} onClick={()=>{setTipoSal(v);setSd("");setR(null);}} style={{padding:"7px 16px",borderRadius:8,border:`1.5px solid ${tipoSal===v?C.navy:C.border}`,background:tipoSal===v?C.navy:"transparent",color:tipoSal===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
+          ))}
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-        <Input label="Salario diario $" type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder="Ej: 331"/>
+        <Input label={`Sueldo ${tipoSal} $`} type="number" value={sd} onChange={e=>setSd(e.target.value)} placeholder={tipoSal==="semanal"?"Ej: 2317":tipoSal==="mensual"?"Ej: 9930":"Ej: 331"}/>
         <Input label="Fecha de ingreso" type="date" value={fi} onChange={e=>setFi(e.target.value)}/>
         <Input label="Fecha de baja" type="date" value={ff} onChange={e=>setFf(e.target.value)}/>
       </div>
+      {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <div style={{marginBottom:16}}>
         <div style={{color:C.muted,fontSize:11,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo de separación</div>
         <div style={{display:"flex",gap:8}}>
@@ -2317,6 +2372,7 @@ function CalcLiquidacion() {
         ]}/>
         <TablaDesglose total={r.total} labelTotal="TOTAL LIQUIDACIÓN" filas={[
           ["Antigüedad",`${r.anios_c} años`],
+          [`Sueldo ${r.tipoSal}`,`$${fmt(r.salInput)}`],["Salario diario equivalente",`$${fmt(r.salDiario)}`],
           [`Vacaciones prop. (${r.vac_prop} días)`,`$${fmt(r.importe_vac)}`],
           ["Prima vacacional (25%)",`$${fmt(r.prima_vac)}`],
           ["Aguinaldo proporcional",`$${fmt(r.aguinaldo)}`],
