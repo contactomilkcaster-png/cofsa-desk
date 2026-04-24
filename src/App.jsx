@@ -2066,15 +2066,31 @@ function CalcVacaciones() {
     const inicio=new Date(fi),fin=new Date(ff);
     if(inicio>=fin){ alert("La fecha de ingreso debe ser anterior a la fecha de cálculo."); return; }
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
-    const anios=dias_total/365; const anios_c=Math.floor(anios);
-    const dias_anio=dias_total-anios_c*365;
-    const dias_vac=diasVacaciones(anios_c);
-    const vac_prop=anios_c===0
-      ? Math.round((dias_anio/365)*diasVacaciones(1))
-      : Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
-    const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
-    const prima_anual=dias_vac*salDiario*0.25;
-    setR({anios:anios.toFixed(2),anios_c,dias_vac,vac_prop,importe_vac,prima_vac,prima_anual,salDiario,salInput,tipoSal,fi,ff,total:importe_vac+prima_vac});
+    const anios=dias_total/365;
+    const anios_c=Math.floor(anios);
+    const dias_anio=dias_total - anios_c*365;
+
+    // Días de vacaciones que corresponden según antigüedad
+    const dias_vac_completo = diasVacaciones(anios_c); // del año recién cumplido
+    const dias_vac_siguiente = diasVacaciones(anios_c + 1); // del siguiente año
+
+    // Si está exactamente en aniversario (dias_anio=0) → pagar el año recién cumplido completo
+    // Si tiene días proporcionales → calcular fracción del siguiente año
+    const en_aniversario = dias_anio === 0;
+    const vac_prop = en_aniversario
+      ? dias_vac_completo
+      : Math.round((dias_anio / 365) * dias_vac_siguiente);
+    const importe_vac = vac_prop * salDiario;
+    const prima_vac = importe_vac * 0.25;
+    const prima_anual = dias_vac_completo * salDiario * 0.25;
+
+    setR({
+      anios: anios.toFixed(2), anios_c, dias_vac: dias_vac_completo,
+      vac_prop, importe_vac, prima_vac, prima_anual,
+      salDiario, salInput, tipoSal, fi, ff,
+      total: importe_vac + prima_vac,
+      en_aniversario, dias_anio,
+    });
   };
 
   const descargar=async()=>{
@@ -2111,12 +2127,13 @@ function CalcVacaciones() {
       {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
+        {r.en_aniversario && <div style={{background:C.greenBg,border:`1px solid ${C.green}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.green,fontWeight:600,marginBottom:12}}>✅ Fecha de aniversario exacta — se pagan los {r.vac_prop} días del año recién cumplido completos.</div>}
         <TarjetasResumen items={[
           {l:"Antigüedad",v:`${r.anios} años`,c:C.navy,bg:C.navyDim},
-          {l:"Días vacaciones (año completo)",v:`${r.dias_vac} días`,c:C.accent,bg:C.navyDim},
+          {l:r.en_aniversario?"Días vacaciones (año cumplido)":"Días vacaciones (año completo)",v:`${r.dias_vac} días`,c:C.accent,bg:C.navyDim},
           {l:"Prima vacacional anual",v:`$${fmt(r.prima_anual)}`,c:C.accent,bg:C.navyDim},
-          {l:"Días proporcionales",v:`${r.vac_prop} días`,c:C.yellow,bg:C.yellowBg},
-          {l:"Prima proporcional (25%)",v:`$${fmt(r.prima_vac)}`,c:C.yellow,bg:C.yellowBg},
+          {l:r.en_aniversario?"Días a pagar (aniversario)":"Días proporcionales",v:`${r.vac_prop} días`,c:r.en_aniversario?C.green:C.yellow,bg:r.en_aniversario?C.greenBg:C.yellowBg},
+          {l:"Prima proporcional (25%)",v:`$${fmt(r.prima_vac)}`,c:r.en_aniversario?C.green:C.yellow,bg:r.en_aniversario?C.greenBg:C.yellowBg},
           {l:"TOTAL A PAGAR",v:`$${fmt(r.total)}`,c:C.green,bg:C.greenBg,grande:true},
         ]}/>
         <TablaDesglose total={r.total} labelTotal="TOTAL A PAGAR" filas={[
