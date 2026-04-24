@@ -2064,13 +2064,16 @@ function CalcVacaciones() {
     const salInput=parseFloat(sd); if(!salInput||!fi) return;
     const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
+    if(inicio>=fin){ alert("La fecha de ingreso debe ser anterior a la fecha de cálculo."); return; }
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios=dias_total/365; const anios_c=Math.floor(anios);
     const dias_anio=dias_total-anios_c*365;
     const dias_vac=diasVacaciones(anios_c);
-    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const vac_prop=anios_c===0
+      ? Math.round((dias_anio/365)*diasVacaciones(1))
+      : Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
     const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
-    const prima_anual=diasVacaciones(anios_c)*salDiario*0.25;
+    const prima_anual=dias_vac*salDiario*0.25;
     setR({anios:anios.toFixed(2),anios_c,dias_vac,vac_prop,importe_vac,prima_vac,prima_anual,salDiario,salInput,tipoSal,fi,ff,total:importe_vac+prima_vac});
   };
 
@@ -2210,9 +2213,12 @@ function CalcFiniquito() {
     const salInput=parseFloat(sd); if(!salInput||!fi) return;
     const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
+    if(inicio>=fin){ alert("La fecha de ingreso debe ser anterior a la fecha de baja."); return; }
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
-    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const vac_prop=anios_c===0
+      ? Math.round((dias_anio/365)*diasVacaciones(1))
+      : Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
     const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
     const aguinaldo=(dias_anio/365)*15*salDiario;
     const dias_pend=dias_anio%30; const salarios_pend=dias_pend*salDiario;
@@ -2295,9 +2301,12 @@ function CalcLiquidacion() {
     const salInput=parseFloat(sd); if(!salInput||!fi) return;
     const salDiario=toDaily(salInput);
     const inicio=new Date(fi),fin=new Date(ff);
+    if(inicio>=fin){ alert("La fecha de ingreso debe ser anterior a la fecha de baja."); return; }
     const dias_total=Math.floor((fin-inicio)/(1000*60*60*24));
     const anios_c=Math.floor(dias_total/365); const dias_anio=dias_total-anios_c*365;
-    const vac_prop=Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
+    const vac_prop=anios_c===0
+      ? Math.round((dias_anio/365)*diasVacaciones(1))
+      : Math.round((dias_anio/365)*diasVacaciones(anios_c+1));
     const importe_vac=vac_prop*salDiario; const prima_vac=importe_vac*0.25;
     const aguinaldo=(dias_anio/365)*15*salDiario;
     const uma2=UMA_DIARIA_2026*2; const base_ant=Math.min(salDiario,uma2);
