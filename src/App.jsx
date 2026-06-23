@@ -260,6 +260,7 @@ const NAV_COFSA = [
 const NAV_FYNCO = [
   { id:"fynco_dashboard", icon:"⊞", label:"Dashboard" },
   { id:"fynco_clientes", icon:"👥", label:"Clientes" },
+  { id:"fynco_gastos", icon:"💸", label:"Gastos" },
   { id:"fynco_cotizaciones", icon:"📝", label:"Cotización" },
 ];
 const NAV = NAV_COFSA; // compatibilidad
@@ -3310,8 +3311,15 @@ function FyncoDashboard() {
   const en30dias = new Date(hoy); en30dias.setDate(en30dias.getDate()+30);
 
   const movMes = movimientos.filter(m=>{ const f=new Date(m.fecha); return f>=inicioMes && f<=finMes; });
-  const ingresoMes = movMes.filter(m=>m.tipo==="ingreso").reduce((s,m)=>s+parseFloat(m.monto||0),0);
   const gastoMes = movMes.filter(m=>m.tipo==="gasto").reduce((s,m)=>s+parseFloat(m.monto||0),0);
+
+  // Ingresos del mes: suma de monto_mensual de clientes adquiridos (fecha_alta) en el mes en curso
+  const clientesNuevosMes = clientes.filter(c=>{
+    if(!c.fecha_alta) return false;
+    const f=new Date(c.fecha_alta);
+    return f>=inicioMes && f<=finMes;
+  });
+  const ingresoMes = clientesNuevosMes.reduce((s,c)=>s+parseFloat(c.monto_mensual||0),0);
 
   const porVencer = clientes.filter(c=>{
     if(!c.fecha_vencimiento) return false;
@@ -3322,18 +3330,13 @@ function FyncoDashboard() {
     if(!c.fecha_vencimiento) return false;
     return new Date(c.fecha_vencimiento)<hoy && c.status==="activo";
   });
-  const nuevosMes = clientes.filter(c=>{
-    if(!c.fecha_alta) return false;
-    const f=new Date(c.fecha_alta);
-    return f>=inicioMes && f<=finMes;
-  });
 
   const cards = [
     { label:"Ingresos del mes", value:`$${fmt(ingresoMes)}`, icon:"💰", color:C.green, bg:C.greenBg },
     { label:"Gastos del mes", value:`$${fmt(gastoMes)}`, icon:"💸", color:C.red, bg:C.redBg },
     { label:"Clientes por vencer (30 días)", value:porVencer.length, icon:"⏳", color:C.yellow, bg:C.yellowBg },
     { label:"Clientes vencidos", value:vencidos.length, icon:"⚠️", color:C.red, bg:C.redBg },
-    { label:"Nuevos clientes del mes", value:nuevosMes.length, icon:"✨", color:C.accent, bg:C.navyDim },
+    { label:"Nuevos clientes del mes", value:clientesNuevosMes.length, icon:"✨", color:C.accent, bg:C.navyDim },
   ];
 
   return (
@@ -3397,7 +3400,7 @@ function FyncoClientesModule({ user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notif, setNotif] = useState(null);
-  const [form, setForm] = useState({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_vencimiento:"" });
+  const [form, setForm] = useState({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_alta:new Date().toISOString().slice(0,10), fecha_vencimiento:"" });
 
   const load = async () => {
     setLoading(true);
@@ -3419,7 +3422,7 @@ function FyncoClientesModule({ user }) {
     if (error) { showNotif("❌ Error al guardar"); return; }
     showNotif("✅ Cliente agregado");
     setShowAdd(false);
-    setForm({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_vencimiento:"" });
+    setForm({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_alta:new Date().toISOString().slice(0,10), fecha_vencimiento:"" });
     load();
   };
 
@@ -3515,11 +3518,136 @@ function FyncoClientesModule({ user }) {
           </FieldSelect>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Input label="Monto mensual $" type="number" value={form.monto_mensual} onChange={e=>setForm(p=>({...p,monto_mensual:e.target.value}))} placeholder="Ej: 399"/>
-            <Input label="Fecha de vencimiento" type="date" value={form.fecha_vencimiento} onChange={e=>setForm(p=>({...p,fecha_vencimiento:e.target.value}))}/>
+            <Input label="Fecha de adquisición" type="date" value={form.fecha_alta} onChange={e=>setForm(p=>({...p,fecha_alta:e.target.value}))}/>
           </div>
+          <Input label="Fecha de vencimiento" type="date" value={form.fecha_vencimiento} onChange={e=>setForm(p=>({...p,fecha_vencimiento:e.target.value}))}/>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
             <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
             <Btn onClick={guardar} loading={saving} disabled={!form.razon_social}>Guardar cliente</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function FyncoGastosModule({ user }) {
+  const [gastos, setGastos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notif, setNotif] = useState(null);
+  const [form, setForm] = useState({ concepto:"", monto:"", fecha:new Date().toISOString().slice(0,10) });
+  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth());
+  const [anioFiltro, setAnioFiltro] = useState(new Date().getFullYear());
+
+  const fmt = n => parseFloat(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("fynco_movimientos").select("*").eq("tipo","gasto").order("fecha",{ascending:false});
+    setGastos(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3000); };
+
+  const guardar = async () => {
+    if (!form.concepto || !form.monto) return;
+    setSaving(true);
+    const { error } = await supabase.from("fynco_movimientos").insert([{
+      tipo:"gasto", concepto:form.concepto, monto:parseFloat(form.monto)||0, fecha:form.fecha, created_by:user.id,
+    }]);
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar"); return; }
+    showNotif("✅ Gasto registrado");
+    setShowAdd(false);
+    setForm({ concepto:"", monto:"", fecha:new Date().toISOString().slice(0,10) });
+    load();
+  };
+
+  const eliminar = async (id) => {
+    await supabase.from("fynco_movimientos").delete().eq("id",id);
+    showNotif("🗑️ Gasto eliminado");
+    load();
+  };
+
+  const gastosFiltrados = gastos.filter(g=>{
+    const f = new Date(g.fecha);
+    return f.getMonth()===mesFiltro && f.getFullYear()===anioFiltro;
+  });
+  const totalMes = gastosFiltrados.reduce((s,g)=>s+parseFloat(g.monto||0),0);
+
+  return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Gastos FYNCO</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{gastosFiltrados.length} gastos en {MESES[mesFiltro]} {anioFiltro}</p>
+        </div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Nuevo gasto</Btn>
+      </div>
+
+      {/* Filtro mes/año */}
+      <div style={{display:"flex",gap:10,marginBottom:20,alignItems:"center"}}>
+        <FieldSelect value={mesFiltro} onChange={e=>setMesFiltro(parseInt(e.target.value))} style={{width:160}}>
+          {MESES.map((m,i)=><option key={m} value={i}>{m}</option>)}
+        </FieldSelect>
+        <FieldSelect value={anioFiltro} onChange={e=>setAnioFiltro(parseInt(e.target.value))} style={{width:110}}>
+          {[anioFiltro-1,anioFiltro,anioFiltro+1].map(a=><option key={a} value={a}>{a}</option>)}
+        </FieldSelect>
+        <div style={{background:C.redBg,border:`1.5px solid ${C.red}33`,borderRadius:10,padding:"10px 18px",marginLeft:"auto"}}>
+          <span style={{color:C.red,fontWeight:800,fontSize:18}}>${fmt(totalMes)}</span>
+          <span style={{color:C.red,fontSize:12,marginLeft:8,opacity:0.8}}>Total del mes</span>
+        </div>
+      </div>
+
+      {loading ? <Spinner/> : gastosFiltrados.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>💸</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin gastos registrados en {MESES[mesFiltro]}</div>
+          <Btn onClick={()=>setShowAdd(true)}>Registrar primer gasto</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Fecha","Concepto","Monto","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {gastosFiltrados.map(g=>(
+                <tr key={g.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{new Date(g.fecha).toLocaleDateString("es-MX")}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontWeight:600,fontSize:13}}>{g.concepto}</td>
+                  <td style={{padding:"12px 14px",color:C.red,fontWeight:700,fontSize:13}}>${fmt(g.monto)}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <button onClick={()=>eliminar(g.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {showAdd && (
+        <Modal title="Nuevo gasto" onClose={()=>setShowAdd(false)}>
+          <Input label="Descripción *" value={form.concepto} onChange={e=>setForm(p=>({...p,concepto:e.target.value}))} placeholder="Ej: Renta de oficina"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <Input label="Monto $ *" type="number" value={form.monto} onChange={e=>setForm(p=>({...p,monto:e.target.value}))} placeholder="Ej: 5000"/>
+            <Input label="Fecha" type="date" value={form.fecha} onChange={e=>setForm(p=>({...p,fecha:e.target.value}))}/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
+            <Btn onClick={guardar} loading={saving} disabled={!form.concepto||!form.monto}>Registrar gasto</Btn>
           </div>
         </Modal>
       )}
@@ -3955,6 +4083,7 @@ export default function App() {
     asistente: <AsistenteModule user={user} />,
     fynco_dashboard: <FyncoDashboard />,
     fynco_clientes: <FyncoClientesModule user={user} />,
+    fynco_gastos: <FyncoGastosModule user={user} />,
     fynco_cotizaciones: <FyncoCotizacionesModule user={user} />,
   };
 
