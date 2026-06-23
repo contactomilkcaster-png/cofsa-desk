@@ -246,7 +246,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
-const NAV = [
+const NAV_COFSA = [
   { id:"dashboard", icon:"⊞", label:"Dashboard" },
   { id:"impuestos", icon:"📋", label:"Impuestos" },
   { id:"tareas", icon:"✓", label:"Tareas" },
@@ -255,28 +255,63 @@ const NAV = [
   { id:"nomina", icon:"🧮", label:"Cálculos" },
   { id:"asistente", icon:"🤖", label:"Asistente IA" },
 ];
+const NAV_FYNCO = [
+  { id:"fynco_dashboard", icon:"⊞", label:"Dashboard" },
+  { id:"fynco_clientes", icon:"👥", label:"Clientes" },
+  { id:"fynco_cotizaciones", icon:"📝", label:"Cotización" },
+];
+const NAV = NAV_COFSA; // compatibilidad
 
-function Sidebar({ active, onNav, user, onLogout, notifCount }) {
+const EMPRESAS = [
+  { id:"cofsa", nombre:"COFSA DESK", subt:"Sistema de gestión", logo:LOGO_B64 },
+  { id:"fynco", nombre:"FYNCO", subt:"Facturación y Folios", logo:null },
+];
+
+function Sidebar({ active, onNav, user, onLogout, notifCount, empresa, setEmpresa }) {
   const initials = (user.email||"U").substring(0,2).toUpperCase();
+  const [selOpen, setSelOpen] = useState(false);
+  const emp = EMPRESAS.find(e=>e.id===empresa) || EMPRESAS[0];
+  const navItems = empresa==="fynco" ? NAV_FYNCO : NAV_COFSA;
+  const showCotizaciones = empresa==="cofsa" && ["ricardo.cerda@cofsamty.com","cofsamty@gmail.com"].includes(user.email);
+
   return (
     <div style={{ width:230, background:C.navy, display:"flex", flexDirection:"column", flexShrink:0, boxShadow:"4px 0 20px rgba(0,0,0,0.1)" }}>
-      {/* Logo */}
-      <div style={{ padding:"24px 20px 20px", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ width:42, height:42, borderRadius:11, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, border:"1px solid rgba(255,255,255,0.15)" }}>
-            <img src={LOGO_B64} alt="COFSA" style={{ width:32, height:32, objectFit:"contain" }} />
+      {/* Selector de empresa */}
+      <div style={{ padding:"18px 16px 14px", borderBottom:"1px solid rgba(255,255,255,0.08)", position:"relative" }}>
+        <div onClick={()=>setSelOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", padding:"6px 8px", borderRadius:10, background:selOpen?"rgba(255,255,255,0.08)":"transparent" }}>
+          <div style={{ width:38, height:38, borderRadius:10, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, border:"1px solid rgba(255,255,255,0.15)" }}>
+            {emp.logo ? <img src={emp.logo} alt={emp.nombre} style={{ width:28, height:28, objectFit:"contain" }} /> : <span style={{ color:C.white, fontWeight:800, fontSize:14 }}>F</span>}
           </div>
-          <div>
-            <div style={{ color:C.white, fontWeight:800, fontSize:14, letterSpacing:"-0.01em", fontFamily:"'Montserrat', sans-serif" }}>COFSA DESK</div>
-            <div style={{ color:"rgba(255,255,255,0.4)", fontSize:9, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:1 }}>Sistema de gestión</div>
+          <div style={{ flex:1, overflow:"hidden" }}>
+            <div style={{ color:C.white, fontWeight:800, fontSize:13, letterSpacing:"-0.01em", fontFamily:"'Montserrat', sans-serif" }}>{emp.nombre}</div>
+            <div style={{ color:"rgba(255,255,255,0.4)", fontSize:8.5, textTransform:"uppercase", letterSpacing:"0.07em", marginTop:1 }}>{emp.subt}</div>
           </div>
+          <span style={{ color:"rgba(255,255,255,0.4)", fontSize:11, transform:selOpen?"rotate(180deg)":"none", transition:"transform 0.15s" }}>▼</span>
         </div>
+        {selOpen && (
+          <div style={{ position:"absolute", top:"100%", left:16, right:16, marginTop:6, background:"#0f1b35", borderRadius:10, border:"1px solid rgba(255,255,255,0.12)", boxShadow:"0 12px 32px rgba(0,0,0,0.4)", zIndex:50, overflow:"hidden" }}>
+            {EMPRESAS.map(e=>(
+              <div key={e.id} onClick={()=>{setEmpresa(e.id);setSelOpen(false);onNav(e.id==="fynco"?"fynco_dashboard":"dashboard");}} style={{
+                display:"flex", alignItems:"center", gap:10, padding:"10px 14px", cursor:"pointer",
+                background: empresa===e.id ? "rgba(255,255,255,0.08)" : "transparent",
+              }}
+                onMouseEnter={ev=>ev.currentTarget.style.background="rgba(255,255,255,0.1)"}
+                onMouseLeave={ev=>ev.currentTarget.style.background=empresa===e.id?"rgba(255,255,255,0.08)":"transparent"}>
+                <div style={{ width:26, height:26, borderRadius:7, background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  {e.logo ? <img src={e.logo} alt={e.nombre} style={{ width:18, height:18, objectFit:"contain" }} /> : <span style={{ color:C.white, fontWeight:800, fontSize:11 }}>F</span>}
+                </div>
+                <span style={{ color:C.white, fontSize:13, fontWeight:600 }}>{e.nombre}</span>
+                {empresa===e.id && <span style={{ marginLeft:"auto", color:"#4ADE80", fontSize:13 }}>✓</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Nav */}
       <nav style={{ flex:1, padding:"16px 12px" }}>
         <div style={{ color:"rgba(255,255,255,0.3)", fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", padding:"0 8px", marginBottom:10 }}>Módulos</div>
-        {[...NAV, ...(["ricardo.cerda@cofsamty.com","cofsamty@gmail.com"].includes(user.email)?[{id:"cotizaciones",icon:"📝",label:"Cotizaciones"}]:[])].map(n => (
+        {[...navItems, ...(showCotizaciones?[{id:"cotizaciones",icon:"📝",label:"Cotizaciones"}]:[])].map(n => (
           <div key={n.id} className="nav-item" onClick={()=>onNav(n.id)} style={{
             display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
             borderRadius:10, cursor:"pointer", marginBottom:3,
@@ -3231,10 +3266,621 @@ function CotizacionesModule({ user }) {
   );
 }
 
+// ── FYNCO ─────────────────────────────────────────────────────────────────
+
+const FYNCO_PAQUETES_FOLIOS = [
+  { folios:10,   timbres:5.80,  mensual:39,  anual:59,   sinVigencia:79   },
+  { folios:50,   timbres:29,    mensual:79,  anual:129,  sinVigencia:169  },
+  { folios:100,  timbres:58,    mensual:119, anual:249,  sinVigencia:329  },
+  { folios:200,  timbres:116,   mensual:199, anual:429,  sinVigencia:549  },
+  { folios:250,  timbres:145,   mensual:239, anual:499,  sinVigencia:649  },
+  { folios:500,  timbres:290,   mensual:399, anual:899,  sinVigencia:1149 },
+  { folios:1000, timbres:580,   mensual:690, anual:1590, sinVigencia:1990 },
+];
+
+const FYNCO_PAQUETES_DESPACHO = [
+  { nombre:"Despacho Start",   folios:1000, rfc:"Hasta 10",  anual:1490, sinVigencia:1890 },
+  { nombre:"Despacho Pro",     folios:2500, rfc:"Hasta 25",  anual:2990, sinVigencia:3790 },
+  { nombre:"Despacho Premium", folios:5000, rfc:"Ilimitado", anual:4990, sinVigencia:6290 },
+];
+
+function FyncoDashboard() {
+  const [clientes, setClientes] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const [cli, mov] = await Promise.all([
+      supabase.from("fynco_clientes").select("*"),
+      supabase.from("fynco_movimientos").select("*"),
+    ]);
+    setClientes(cli.data||[]);
+    setMovimientos(mov.data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0);
+  const en30dias = new Date(hoy); en30dias.setDate(en30dias.getDate()+30);
+
+  const movMes = movimientos.filter(m=>{ const f=new Date(m.fecha); return f>=inicioMes && f<=finMes; });
+  const ingresoMes = movMes.filter(m=>m.tipo==="ingreso").reduce((s,m)=>s+parseFloat(m.monto||0),0);
+  const gastoMes = movMes.filter(m=>m.tipo==="gasto").reduce((s,m)=>s+parseFloat(m.monto||0),0);
+
+  const porVencer = clientes.filter(c=>{
+    if(!c.fecha_vencimiento) return false;
+    const v=new Date(c.fecha_vencimiento);
+    return v>=hoy && v<=en30dias && c.status==="activo";
+  });
+  const vencidos = clientes.filter(c=>{
+    if(!c.fecha_vencimiento) return false;
+    return new Date(c.fecha_vencimiento)<hoy && c.status==="activo";
+  });
+  const nuevosMes = clientes.filter(c=>{
+    if(!c.fecha_alta) return false;
+    const f=new Date(c.fecha_alta);
+    return f>=inicioMes && f<=finMes;
+  });
+
+  const cards = [
+    { label:"Ingresos del mes", value:`$${fmt(ingresoMes)}`, icon:"💰", color:C.green, bg:C.greenBg },
+    { label:"Gastos del mes", value:`$${fmt(gastoMes)}`, icon:"💸", color:C.red, bg:C.redBg },
+    { label:"Clientes por vencer (30 días)", value:porVencer.length, icon:"⏳", color:C.yellow, bg:C.yellowBg },
+    { label:"Clientes vencidos", value:vencidos.length, icon:"⚠️", color:C.red, bg:C.redBg },
+    { label:"Nuevos clientes del mes", value:nuevosMes.length, icon:"✨", color:C.accent, bg:C.navyDim },
+  ];
+
+  return (
+    <div style={{ padding:28, maxWidth:1200 }}>
+      <style>{ANIM}</style>
+      <div style={{ marginBottom:28, animation:"fadeUp 0.35s ease" }}>
+        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:24, fontWeight:800 }}>Dashboard FYNCO</h1>
+        <p style={{ margin:0, color:C.muted, fontSize:14 }}>{hoy.toLocaleDateString("es-MX",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
+      </div>
+
+      {loading ? <Spinner/> : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:16, marginBottom:28 }}>
+          {cards.map(c=>(
+            <div key={c.label} className="card" style={{ background:c.bg, border:`1.5px solid ${c.color}33`, borderRadius:14, padding:22, position:"relative", overflow:"hidden" }}>
+              <div style={{ position:"absolute", top:-10, right:-10, fontSize:48, opacity:0.08 }}>{c.icon}</div>
+              <div style={{ fontSize:20, marginBottom:10 }}>{c.icon}</div>
+              <div style={{ color:c.color, fontSize:26, fontWeight:800 }}>{c.value}</div>
+              <div style={{ color:c.color, fontSize:12, marginTop:4, opacity:0.85, fontWeight:500 }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && (vencidos.length>0 || porVencer.length>0) && (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",background:C.navy,color:C.white,fontWeight:700,fontSize:13}}>⏳ Clientes que requieren atención</div>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Razón social","RFC","Paquete","Vencimiento","Estado"].map(h=>(
+                  <th key={h} style={{padding:"8px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...vencidos,...porVencer].map((c,i)=>{
+                const vencido = new Date(c.fecha_vencimiento) < hoy;
+                return (
+                  <tr key={c.id} style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:"10px 14px",color:C.text,fontWeight:600,fontSize:13}}>{c.razon_social}</td>
+                    <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{c.rfc||"—"}</td>
+                    <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{c.paquete||"—"}</td>
+                    <td style={{padding:"10px 14px",color:vencido?C.red:C.yellow,fontWeight:600,fontSize:12}}>{new Date(c.fecha_vencimiento).toLocaleDateString("es-MX")}</td>
+                    <td style={{padding:"10px 14px"}}>
+                      <span style={{background:(vencido?C.red:C.yellow)+"22",color:vencido?C.red:C.yellow,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{vencido?"Vencido":"Por vencer"}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function FyncoClientesModule({ user }) {
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notif, setNotif] = useState(null);
+  const [form, setForm] = useState({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_vencimiento:"" });
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("fynco_clientes").select("*").order("created_at",{ascending:false});
+    setClientes(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3000); };
+
+  const guardar = async () => {
+    if (!form.razon_social) return;
+    setSaving(true);
+    const { error } = await supabase.from("fynco_clientes").insert([{
+      ...form, monto_mensual: parseFloat(form.monto_mensual)||0, created_by:user.id,
+    }]);
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar"); return; }
+    showNotif("✅ Cliente agregado");
+    setShowAdd(false);
+    setForm({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_vencimiento:"" });
+    load();
+  };
+
+  const eliminar = async (id) => {
+    await supabase.from("fynco_clientes").delete().eq("id",id);
+    showNotif("🗑️ Cliente eliminado");
+    load();
+  };
+
+  const todosLosPaquetes = [
+    ...FYNCO_PAQUETES_FOLIOS.map(p=>`${p.folios} folios`),
+    ...FYNCO_PAQUETES_DESPACHO.map(p=>p.nombre),
+  ];
+
+  return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Clientes FYNCO</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{clientes.length} clientes registrados</p>
+        </div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Nuevo cliente</Btn>
+      </div>
+
+      {loading ? <Spinner/> : clientes.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>👥</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin clientes aún</div>
+          <Btn onClick={()=>setShowAdd(true)}>Agregar primer cliente</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Razón social","RFC","Correo","Paquete","Mensualidad","Vencimiento","Estado","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {clientes.map(c=>{
+                const vencido = c.fecha_vencimiento && new Date(c.fecha_vencimiento)<new Date();
+                return (
+                  <tr key={c.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{c.razon_social}</td>
+                    <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{c.rfc||"—"}</td>
+                    <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{c.correo||"—"}</td>
+                    <td style={{padding:"12px 14px",color:C.text,fontSize:12}}>{c.paquete||"—"}</td>
+                    <td style={{padding:"12px 14px",color:C.green,fontWeight:600,fontSize:13}}>${parseFloat(c.monto_mensual||0).toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
+                    <td style={{padding:"12px 14px",color:vencido?C.red:C.muted,fontSize:12,fontWeight:vencido?600:400}}>{c.fecha_vencimiento?new Date(c.fecha_vencimiento).toLocaleDateString("es-MX"):"—"}</td>
+                    <td style={{padding:"12px 14px"}}>
+                      <span style={{background:(vencido?C.red:C.green)+"22",color:vencido?C.red:C.green,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{vencido?"Vencido":"Activo"}</span>
+                    </td>
+                    <td style={{padding:"12px 14px"}}>
+                      <button onClick={()=>eliminar(c.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {showAdd && (
+        <Modal title="Nuevo cliente FYNCO" onClose={()=>setShowAdd(false)}>
+          <Input label="Razón social *" value={form.razon_social} onChange={e=>setForm(p=>({...p,razon_social:e.target.value}))} placeholder="Ej: Grupo Regio S.A. de C.V."/>
+          <Input label="RFC" value={form.rfc} onChange={e=>setForm(p=>({...p,rfc:e.target.value}))} placeholder="Ej: GRE210101AB1"/>
+          <Input label="Correo" value={form.correo} onChange={e=>setForm(p=>({...p,correo:e.target.value}))} placeholder="correo@empresa.com"/>
+          <FieldSelect label="Paquete" value={form.paquete} onChange={e=>setForm(p=>({...p,paquete:e.target.value}))}>
+            <option value="">— Selecciona un paquete —</option>
+            {todosLosPaquetes.map(p=><option key={p}>{p}</option>)}
+          </FieldSelect>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <Input label="Monto mensual $" type="number" value={form.monto_mensual} onChange={e=>setForm(p=>({...p,monto_mensual:e.target.value}))} placeholder="Ej: 399"/>
+            <Input label="Fecha de vencimiento" type="date" value={form.fecha_vencimiento} onChange={e=>setForm(p=>({...p,fecha_vencimiento:e.target.value}))}/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
+            <Btn onClick={guardar} loading={saving} disabled={!form.razon_social}>Guardar cliente</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function FyncoCotizacionesModule({ user }) {
+  const [vista, setVista] = useState("historial");
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notif, setNotif] = useState(null);
+  const [gen, setGen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [clienteEmpresa, setClienteEmpresa] = useState("");
+  const [clienteEmail, setClienteEmail] = useState("");
+  const [clienteTel, setClienteTel] = useState("");
+  const [notas, setNotas] = useState("Esta cotización tiene una vigencia de 30 días naturales a partir de su fecha de emisión.");
+  const [paquetesSel, setPaquetesSel] = useState([]);
+  const [tabCatalogo, setTabCatalogo] = useState("folios");
+
+  const fmt = n => n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const subtotal = paquetesSel.reduce((s,p)=>s+(parseFloat(p.precio)||0),0);
+  const iva = subtotal*0.16;
+  const total = subtotal+iva;
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("fynco_cotizaciones").select("*").order("created_at",{ascending:false});
+    setCotizaciones(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3000); };
+
+  const agregarPaquete = (nombre, desc) => {
+    if (paquetesSel.find(p=>p.nombre===nombre)) return;
+    setPaquetesSel(p=>[...p,{nombre,desc,precio:""}]);
+  };
+  const removerPaquete = nombre => setPaquetesSel(p=>p.filter(x=>x.nombre!==nombre));
+  const setPrecioPaquete = (nombre,val) => setPaquetesSel(p=>p.map(x=>x.nombre===nombre?{...x,precio:val}:x));
+
+  const generarFolio = () => `FYN-${new Date().getFullYear()}-${String(cotizaciones.length+1).padStart(4,"0")}`;
+
+  const resetForm = () => {
+    setClienteNombre(""); setClienteEmpresa(""); setClienteEmail(""); setClienteTel("");
+    setNotas("Esta cotización tiene una vigencia de 30 días naturales a partir de su fecha de emisión.");
+    setPaquetesSel([]);
+  };
+
+  const guardar = async (estatus="borrador") => {
+    if (!clienteNombre || paquetesSel.length===0) return;
+    setSaving(true);
+    const folio = generarFolio();
+    const { error } = await supabase.from("fynco_cotizaciones").insert([{
+      folio, cliente_nombre:clienteNombre, cliente_empresa:clienteEmpresa,
+      cliente_email:clienteEmail, cliente_telefono:clienteTel,
+      paquetes:paquetesSel, subtotal, iva, total, notas, estatus, created_by:user.id,
+    }]);
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar"); return; }
+    showNotif("✅ Cotización guardada");
+    await load(); resetForm(); setVista("historial");
+  };
+
+  const eliminar = async (id) => {
+    await supabase.from("fynco_cotizaciones").delete().eq("id",id);
+    showNotif("🗑️ Cotización eliminada");
+    load();
+  };
+
+  const ESTATUS_COLOR = { borrador:C.muted, enviada:C.accent, aceptada:C.green, rechazada:C.red };
+
+  const descargarPDF = async (cot) => {
+    setGen(true);
+    try {
+      if (!window.jspdf) {
+        await new Promise((resolve,reject)=>{
+          const s=document.createElement("script");
+          s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+          s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+        });
+      }
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+      const W=216,M=18,TW=W-M*2;
+      let y=18;
+
+      doc.setFontSize(22); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("FYNCO", M, y+8);
+      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+      doc.text("Facturacion y Folios", M, y+14);
+      doc.text(`Fecha: ${new Date(cot.created_at).toLocaleDateString("es-MX",{year:"numeric",month:"long",day:"numeric"})}`, M, y+19);
+      doc.text(`Folio: ${cot.folio}`, W-M, y+9, {align:"right"});
+      doc.setTextColor(27,42,74); doc.setFontSize(9); doc.setFont("helvetica","bold");
+      doc.text(`Estatus: ${cot.estatus.toUpperCase()}`, W-M, y+15, {align:"right"});
+      y+=24; doc.setDrawColor(27,42,74); doc.setLineWidth(0.8); doc.line(M,y,W-M,y); y+=8;
+
+      doc.setFontSize(16); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("COTIZACION DE SERVICIOS", M, y); y+=10;
+
+      doc.setFillColor(238,242,251); doc.roundedRect(M,y,TW,22,2,2,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(27,42,74);
+      doc.text("DATOS DEL CLIENTE", M+4, y+6);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(30,41,59);
+      if (cot.cliente_nombre) doc.text(`Nombre: ${cot.cliente_nombre}`, M+4, y+12);
+      if (cot.cliente_empresa) doc.text(`Empresa: ${cot.cliente_empresa}`, M+4, y+17);
+      if (cot.cliente_email) doc.text(`Email: ${cot.cliente_email}`, M+TW/2+4, y+12);
+      if (cot.cliente_telefono) doc.text(`Tel: ${cot.cliente_telefono}`, M+TW/2+4, y+17);
+      y+=28;
+
+      doc.setFillColor(27,42,74); doc.rect(M,y,TW,7,"F");
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.text("PAQUETE / DESCRIPCION", M+3, y+5);
+      doc.text("IMPORTE", W-M-3, y+5, {align:"right"}); y+=7;
+
+      const pqs = typeof cot.paquetes==="string"?JSON.parse(cot.paquetes):cot.paquetes;
+      pqs.forEach((p,i)=>{
+        if(y>240){doc.addPage();y=18;}
+        const precio=parseFloat(p.precio)||0;
+        const lineH = p.desc?14:8;
+        doc.setFillColor(i%2===0?248:255,i%2===0?249:255,i%2===0?252:255);
+        doc.rect(M,y,TW,lineH,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(27,42,74);
+        doc.text(p.nombre, M+3, y+5);
+        if(p.desc){
+          doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+          const descLines=doc.splitTextToSize(p.desc, TW-50);
+          doc.text(descLines[0]||"", M+3, y+10);
+        }
+        doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(27,42,74);
+        doc.text(`$${fmt(precio)}`, W-M-3, y+5, {align:"right"});
+        doc.setDrawColor(210,218,232); doc.setLineWidth(0.1); doc.rect(M,y,TW,lineH,"S");
+        y+=lineH;
+      });
+
+      y+=4;
+      [["Subtotal",`$${fmt(cot.subtotal)}`],["IVA (16%)",`$${fmt(cot.iva)}`]].forEach(([k,v])=>{
+        doc.setFillColor(248,249,252); doc.rect(M+TW-80,y,80,7,"F");
+        doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(30,41,59);
+        doc.text(k, M+TW-77, y+5);
+        doc.setFont("helvetica","bold"); doc.text(v, W-M-3, y+5, {align:"right"});
+        doc.setDrawColor(210,218,232); doc.setLineWidth(0.1); doc.rect(M+TW-80,y,80,7,"S");
+        y+=7;
+      });
+      doc.setFillColor(27,42,74); doc.rect(M+TW-80,y,80,9,"F");
+      doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      doc.text("TOTAL", M+TW-77, y+6);
+      doc.text(`$${fmt(cot.total)}`, W-M-3, y+6, {align:"right"}); y+=13;
+
+      if(cot.notas){
+        y+=4;
+        doc.setFillColor(255,251,235); doc.roundedRect(M,y,TW,20,2,2,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(180,100,0);
+        doc.text("CONDICIONES Y VIGENCIA", M+4, y+6);
+        doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(80,60,0);
+        const notasLines=doc.splitTextToSize(cot.notas, TW-8);
+        notasLines.slice(0,3).forEach((line,i)=>doc.text(line, M+4, y+11+(i*4)));
+        y+=24;
+      }
+
+      y+=6;
+      doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+      doc.line(M, y+15, M+60, y+15); doc.line(M+TW-60, y+15, M+TW, y+15);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("Firma del cliente / Aceptacion", M, y+19);
+      doc.text("FYNCO", M+TW-60, y+19);
+
+      y+=28; doc.setDrawColor(27,42,74); doc.setLineWidth(0.4); doc.line(M,y,W-M,y); y+=5;
+      doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("FYNCO - Facturacion y Folios", M, y);
+      doc.text(`Folio: ${cot.folio}  |  ${new Date().toLocaleDateString("es-MX")}`, W-M, y, {align:"right"});
+
+      doc.save(`Cotizacion_FYNCO_${cot.folio}.pdf`);
+    } catch(e){ console.error(e); }
+    setGen(false);
+  };
+
+  if (vista==="historial") return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Cotizaciones FYNCO</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{cotizaciones.length} cotizaciones registradas</p>
+        </div>
+        <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cotización</Btn>
+      </div>
+
+      {loading ? <Spinner/> : cotizaciones.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>📝</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin cotizaciones aún</div>
+          <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cotización</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Folio","Cliente","Empresa","Total","Estatus","Fecha","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cotizaciones.map(cot=>(
+                <tr key={cot.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{cot.folio}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>{cot.cliente_nombre||"—"}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{cot.cliente_empresa||"—"}</td>
+                  <td style={{padding:"12px 14px",color:C.green,fontWeight:700,fontSize:13}}>${fmt(cot.total)}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <span style={{background:(ESTATUS_COLOR[cot.estatus]||C.muted)+"22",color:ESTATUS_COLOR[cot.estatus]||C.muted,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{cot.estatus}</span>
+                  </td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{new Date(cot.created_at).toLocaleDateString("es-MX")}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>eliminar(cot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{padding:28,maxWidth:980}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <button onClick={()=>setVista("historial")} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
+        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Nueva Cotización FYNCO</h1>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+        <div>
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📋 Datos del cliente</div>
+            <Input label="Nombre del cliente *" value={clienteNombre} onChange={e=>setClienteNombre(e.target.value)} placeholder="Ej: Juan García López"/>
+            <Input label="Empresa" value={clienteEmpresa} onChange={e=>setClienteEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A. de C.V."/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Input label="Email" value={clienteEmail} onChange={e=>setClienteEmail(e.target.value)} placeholder="correo@empresa.com"/>
+              <Input label="Teléfono" value={clienteTel} onChange={e=>setClienteTel(e.target.value)} placeholder="81 1234 5678"/>
+            </div>
+          </Card>
+
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📦 Paquetes seleccionados ({paquetesSel.length})</div>
+            {paquetesSel.length===0 ? (
+              <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Selecciona paquetes del catálogo →</div>
+            ) : (
+              paquetesSel.map(p=>(
+                <div key={p.nombre} style={{background:C.panel,borderRadius:10,padding:12,marginBottom:8,border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                    <div style={{color:C.navy,fontWeight:600,fontSize:13,flex:1,lineHeight:1.4}}>{p.nombre}</div>
+                    <button onClick={()=>removerPaquete(p.nombre)} style={{background:C.redBg,border:"none",borderRadius:6,color:C.red,cursor:"pointer",padding:"3px 8px",fontSize:11,fontFamily:"inherit",flexShrink:0}}>✕</button>
+                  </div>
+                  {p.desc && <div style={{color:C.muted,fontSize:11,marginBottom:8,lineHeight:1.5}}>{p.desc}</div>}
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{color:C.muted,fontSize:12}}>$</span>
+                    <input type="number" value={p.precio} onChange={e=>setPrecioPaquete(p.nombre,e.target.value)} placeholder="0.00"
+                      style={{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"7px 10px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                    <span style={{color:C.muted,fontSize:11}}>MXN</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
+
+          {paquetesSel.length>0 && (
+            <Card style={{marginBottom:16}}>
+              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>💰 Resumen</div>
+              {[["Subtotal",`$${fmt(subtotal)}`],["IVA (16%)",`$${fmt(iva)}`]].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{color:C.muted,fontSize:13}}>{k}</span>
+                  <span style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</span>
+                </div>
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0",marginTop:4}}>
+                <span style={{color:C.navy,fontWeight:800,fontSize:16}}>TOTAL</span>
+                <span style={{color:C.green,fontWeight:800,fontSize:20}}>${fmt(total)}</span>
+              </div>
+            </Card>
+          )}
+
+          <Card style={{marginBottom:16}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>📝 Condiciones y vigencia</div>
+            <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={4}
+              style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
+          </Card>
+
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteNombre||paquetesSel.length===0} variant="ghost">Guardar borrador</Btn>
+            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||paquetesSel.length===0}>💾 Guardar y enviar</Btn>
+          </div>
+        </div>
+
+        <div>
+          <Card>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📚 Catálogo de paquetes</div>
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              {[["folios","Folios CFDI"],["despacho","Planes Despacho"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setTabCatalogo(v)} style={{flex:1,padding:"8px 12px",borderRadius:9,border:`1.5px solid ${tabCatalogo===v?C.navy:C.border}`,background:tabCatalogo===v?C.navy:"transparent",color:tabCatalogo===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
+              ))}
+            </div>
+
+            {tabCatalogo==="folios" && FYNCO_PAQUETES_FOLIOS.map(p=>{
+              const nombreBase = `${p.folios} folios`;
+              const opciones = [
+                {sufijo:"Mensual",precio:p.mensual},
+                {sufijo:"Anual",precio:p.anual},
+                {sufijo:"Sin vigencia",precio:p.sinVigencia},
+              ];
+              return (
+                <div key={p.folios} style={{marginBottom:10,padding:12,background:C.panel,borderRadius:10,border:`1px solid ${C.border}`}}>
+                  <div style={{color:C.navy,fontWeight:700,fontSize:13,marginBottom:8}}>{nombreBase} <span style={{color:C.muted,fontWeight:400,fontSize:11}}>(timbre: ${fmt(p.timbres)})</span></div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {opciones.map(o=>{
+                      const nombreCompleto = `${nombreBase} - ${o.sufijo}`;
+                      const yaAgregado = paquetesSel.find(x=>x.nombre===nombreCompleto);
+                      return (
+                        <button key={o.sufijo} onClick={()=>yaAgregado?removerPaquete(nombreCompleto):agregarPaquete(nombreCompleto, `Plan ${o.sufijo.toLowerCase()} de ${p.folios} folios CFDI`)} style={{
+                          background:yaAgregado?C.redBg:C.greenBg, border:`1px solid ${yaAgregado?C.red:C.green}44`,
+                          borderRadius:8, color:yaAgregado?C.red:C.green, cursor:"pointer", padding:"6px 10px",
+                          fontSize:11, fontWeight:700, fontFamily:"inherit",
+                        }}>{yaAgregado?"✕ ":"+ "}{o.sufijo} ${fmt(o.precio)}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {tabCatalogo==="despacho" && FYNCO_PAQUETES_DESPACHO.map(p=>{
+              const opciones = [
+                {sufijo:"Anual",precio:p.anual},
+                {sufijo:"Sin vigencia",precio:p.sinVigencia},
+              ];
+              return (
+                <div key={p.nombre} style={{marginBottom:10,padding:12,background:C.panel,borderRadius:10,border:`1px solid ${C.border}`}}>
+                  <div style={{color:C.navy,fontWeight:700,fontSize:13,marginBottom:4}}>{p.nombre}</div>
+                  <div style={{color:C.muted,fontSize:11,marginBottom:8}}>{p.folios.toLocaleString()} folios pool · RFC: {p.rfc}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {opciones.map(o=>{
+                      const nombreCompleto = `${p.nombre} - ${o.sufijo}`;
+                      const yaAgregado = paquetesSel.find(x=>x.nombre===nombreCompleto);
+                      return (
+                        <button key={o.sufijo} onClick={()=>yaAgregado?removerPaquete(nombreCompleto):agregarPaquete(nombreCompleto, `${p.nombre}: ${p.folios.toLocaleString()} folios, RFC ${p.rfc} - Plan ${o.sufijo.toLowerCase()}`)} style={{
+                          background:yaAgregado?C.redBg:C.greenBg, border:`1px solid ${yaAgregado?C.red:C.green}44`,
+                          borderRadius:8, color:yaAgregado?C.red:C.green, cursor:"pointer", padding:"6px 10px",
+                          fontSize:11, fontWeight:700, fontFamily:"inherit",
+                        }}>{yaAgregado?"✕ ":"+ "}{o.sufijo} ${fmt(o.precio)}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── APP ROOT ───────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
+  const [empresa, setEmpresa] = useState("cofsa");
   const [activeModule, setActiveModule] = useState("dashboard");
   const [clientFilter, setClientFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -3289,12 +3935,15 @@ export default function App() {
     nomina: <CalculosModule />,
     cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
+    fynco_dashboard: <FyncoDashboard />,
+    fynco_clientes: <FyncoClientesModule user={user} />,
+    fynco_cotizaciones: <FyncoCotizacionesModule user={user} />,
   };
 
   return (
     <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Montserrat', sans-serif" }}>
       <style>{ANIM}</style>
-      <Sidebar active={activeModule} onNav={handleNav} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} />
+      <Sidebar active={activeModule} onNav={handleNav} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} empresa={empresa} setEmpresa={setEmpresa} />
       <main style={{ flex:1, overflowY:(activeModule==="chat"||activeModule==="asistente")?"hidden":"auto" }}>
         {modules[activeModule]}
       </main>
