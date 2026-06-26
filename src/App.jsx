@@ -251,6 +251,7 @@ function LoginScreen({ onLogin }) {
 const NAV_COFSA = [
   { id:"dashboard", icon:"⊞", label:"Dashboard" },
   { id:"impuestos", icon:"📋", label:"Impuestos" },
+  { id:"ordenes", icon:"🛠️", label:"Órdenes de Trabajo" },
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
@@ -3592,6 +3593,360 @@ function CotizacionesModule({ user }) {
   );
 }
 
+// ── ÓRDENES DE TRABAJO ────────────────────────────────────────────────────
+
+const OT_CATEGORIAS = ["Declaración", "SAT", "IMSS", "Cálculos", "INFONAVIT"];
+
+const OT_SUBCATEGORIAS = {
+  "SAT": ["Modificación domicilio fiscal", "Cita SAT", "Renovación FIEL", "Renovación Sellos", "Cambio de régimen"],
+  "IMSS": ["Alta de colaborador", "Baja de colaborador", "Modificación Salarial", "Inscripción al IMSS", "Renovación Certificados"],
+  "Declaración": ["Mensual", "Anual", "Informativa"],
+  "Cálculos": ["Vacaciones", "Aguinaldo", "Retiro Voluntario", "Finiquito", "Nómina", "PTU", "Prima de Antigüedad"],
+  "INFONAVIT": [],
+};
+
+const OT_IMSS_REQUIERE_COLABORADOR = ["Alta de colaborador", "Baja de colaborador", "Modificación Salarial"];
+
+function OrdenesTrabajoModule({ user }) {
+  const [vista, setVista] = useState("historial"); // historial | nueva
+  const [ordenes, setOrdenes] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notif, setNotif] = useState(null);
+  const [gen, setGen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Filtros
+  const [filtroCliente, setFiltroCliente] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+
+  // Form nueva orden
+  const [clienteId, setClienteId] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [subcategoria, setSubcategoria] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [declCasillas, setDeclCasillas] = useState({ isr:false, iva:false, anual:false, otra:false });
+  const [declFecha, setDeclFecha] = useState("");
+  const [colaboradorNombre, setColaboradorNombre] = useState("");
+  const [fechaMovimiento, setFechaMovimiento] = useState(new Date().toISOString().slice(0,10));
+  const [sdi, setSdi] = useState("");
+
+  const fmt = n => parseFloat(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const load = async () => {
+    setLoading(true);
+    const [o, c] = await Promise.all([
+      supabase.from("ordenes_trabajo").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+    ]);
+    setOrdenes(o.data||[]);
+    setClientes(c.data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3000); };
+
+  const resetForm = () => {
+    setClienteId(""); setCategoria(""); setSubcategoria(""); setDescripcion("");
+    setDeclCasillas({ isr:false, iva:false, anual:false, otra:false });
+    setDeclFecha(""); setColaboradorNombre(""); setFechaMovimiento(new Date().toISOString().slice(0,10)); setSdi("");
+  };
+
+  const requiereColaborador = () => {
+    if (categoria === "Cálculos" && subcategoria) return true;
+    if (categoria === "IMSS" && OT_IMSS_REQUIERE_COLABORADOR.includes(subcategoria)) return true;
+    return false;
+  };
+
+  const generarFolio = () => `OT-${new Date().getFullYear()}-${String(ordenes.length+1).padStart(4,"0")}`;
+
+  const formValido = () => {
+    if (!clienteId || !categoria || !descripcion.trim()) return false;
+    if (OT_SUBCATEGORIAS[categoria] && OT_SUBCATEGORIAS[categoria].length > 0 && !subcategoria) return false;
+    return true;
+  };
+
+  const guardar = async () => {
+    if (!formValido()) return;
+    setSaving(true);
+    const cliente = clientes.find(c=>c.id===clienteId);
+    const folio = generarFolio();
+    const payload = {
+      folio,
+      cliente_id: clienteId,
+      cliente_nombre: cliente?.name || "",
+      categoria, subcategoria: subcategoria || null,
+      descripcion: descripcion.trim(),
+      decl_mensual_isr: categoria==="Declaración" ? declCasillas.isr : false,
+      decl_mensual_iva: categoria==="Declaración" ? declCasillas.iva : false,
+      decl_anual: categoria==="Declaración" ? declCasillas.anual : false,
+      decl_otra: categoria==="Declaración" ? declCasillas.otra : false,
+      decl_fecha_presentacion: categoria==="Declaración" ? (declFecha || null) : null,
+      colaborador_nombre: requiereColaborador() ? colaboradorNombre : null,
+      fecha_movimiento: requiereColaborador() ? (fechaMovimiento || null) : null,
+      sdi: requiereColaborador() && sdi ? parseFloat(sdi) : null,
+      created_by: user?.id || null,
+    };
+    const { error } = await supabase.from("ordenes_trabajo").insert([payload]);
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar la orden"); return; }
+    showNotif("✅ Orden de trabajo creada");
+    resetForm();
+    setVista("historial");
+    load();
+  };
+
+  const eliminar = async (id) => {
+    await supabase.from("ordenes_trabajo").delete().eq("id", id);
+    showNotif("🗑️ Orden eliminada");
+    load();
+  };
+
+  const descargarPDF = async (ot) => {
+    setGen(true);
+    try {
+      if (!window.jspdf) {
+        await new Promise((resolve,reject)=>{
+          const s=document.createElement("script");
+          s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+          s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+        });
+      }
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"letter"});
+      const W=216,M=18,TW=W-M*2;
+      let y=20;
+
+      try { doc.addImage(LOGO_B64,"JPEG",M,y,22,22); } catch(e){}
+      doc.setFontSize(18); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("CIA COFSA SERVICE", M+26, y+8);
+      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+      doc.text("Consultoria Contable Fiscal y Administrativa", M+26, y+14);
+      doc.text(`Fecha: ${new Date(ot.created_at).toLocaleDateString("es-MX",{year:"numeric",month:"long",day:"numeric"})}`, M+26, y+19);
+      doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text(`Folio: ${ot.folio}`, W-M, y+9, {align:"right"});
+      y+=28; doc.setDrawColor(27,42,74); doc.setLineWidth(0.8); doc.line(M,y,W-M,y); y+=8;
+
+      doc.setFontSize(16); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+      doc.text("ORDEN DE TRABAJO", M, y); y+=12;
+
+      // Datos generales
+      doc.setFillColor(238,242,251); doc.roundedRect(M,y,TW,28,2,2,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(27,42,74);
+      doc.text(`Cliente: ${ot.cliente_nombre || "—"}`, M+4, y+8);
+      doc.text(`Categoria: ${ot.categoria}`, M+4, y+15);
+      if (ot.subcategoria) doc.text(`Subcategoria: ${ot.subcategoria}`, M+4, y+22);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(100,116,139);
+      doc.text(`Estatus: ${(ot.estatus||"abierta").toUpperCase()}`, M+TW/2+4, y+8);
+      y+=34;
+
+      // Detalles condicionales
+      if (ot.categoria === "Declaración") {
+        const items = [];
+        if (ot.decl_mensual_isr) items.push("Mensual ISR");
+        if (ot.decl_mensual_iva) items.push("Mensual IVA");
+        if (ot.decl_anual) items.push("Anual");
+        if (ot.decl_otra) items.push("Otra");
+        doc.setFillColor(255,251,235); doc.roundedRect(M,y,TW,16,2,2,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(180,100,0);
+        doc.text("DECLARACION PRESENTADA", M+4, y+6);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(80,60,0);
+        doc.text(items.length ? items.join(", ") : "—", M+4, y+12);
+        if (ot.decl_fecha_presentacion) doc.text(`Fecha presentacion: ${ot.decl_fecha_presentacion}`, M+TW/2+4, y+12);
+        y+=20;
+      }
+
+      if (ot.colaborador_nombre || ot.fecha_movimiento || ot.sdi) {
+        doc.setFillColor(238,242,251); doc.roundedRect(M,y,TW,22,2,2,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(27,42,74);
+        doc.text("DATOS DEL COLABORADOR", M+4, y+6);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(30,41,59);
+        doc.text(`Nombre: ${ot.colaborador_nombre || "—"}`, M+4, y+13);
+        doc.text(`Fecha movimiento: ${ot.fecha_movimiento || "—"}`, M+4, y+19);
+        if (ot.sdi) doc.text(`SDI: $${fmt(ot.sdi)}`, M+TW/2+4, y+13);
+        y+=26;
+      }
+
+      // Descripción
+      doc.setFillColor(248,249,252); doc.roundedRect(M,y,TW,40,2,2,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(27,42,74);
+      doc.text("DESCRIPCION DEL MOVIMIENTO", M+4, y+7);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(30,41,59);
+      const descLines = doc.splitTextToSize(ot.descripcion || "", TW-8);
+      descLines.slice(0,8).forEach((line,i)=>doc.text(line, M+4, y+14+(i*5)));
+      y+=46;
+
+      // Firma
+      y+=10;
+      doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+      doc.line(M, y+15, M+60, y+15); doc.line(M+TW-60, y+15, M+TW, y+15);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("Elaboro", M, y+19);
+      doc.text("Autorizo / Cliente", M+TW-60, y+19);
+
+      y+=30; doc.setDrawColor(27,42,74); doc.setLineWidth(0.4); doc.line(M,y,W-M,y); y+=5;
+      doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("CIA COFSA SERVICE", M, y);
+      doc.text(`Folio: ${ot.folio}  |  ${new Date().toLocaleDateString("es-MX")}`, W-M, y, {align:"right"});
+
+      doc.save(`OrdenTrabajo_${ot.folio}.pdf`);
+    } catch(e){ console.error(e); }
+    setGen(false);
+  };
+
+  const ordenesFiltradas = ordenes.filter(o => {
+    if (filtroCliente && o.cliente_nombre !== filtroCliente) return false;
+    if (filtroCategoria && o.categoria !== filtroCategoria) return false;
+    return true;
+  });
+
+  const subcategoriasActuales = OT_SUBCATEGORIAS[categoria] || [];
+
+  // ── VISTA HISTORIAL ──
+  if (vista === "historial") return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Órdenes de Trabajo</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{ordenesFiltradas.length} de {ordenes.length} órdenes</p>
+        </div>
+        <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva orden de trabajo</Btn>
+      </div>
+
+      {/* Filtros */}
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        <FieldSelect value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} style={{width:240}}>
+          <option value="">— Todos los clientes —</option>
+          {clientes.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+        </FieldSelect>
+        <FieldSelect value={filtroCategoria} onChange={e=>setFiltroCategoria(e.target.value)} style={{width:200}}>
+          <option value="">— Todas las categorías —</option>
+          {OT_CATEGORIAS.map(c=><option key={c} value={c}>{c}</option>)}
+        </FieldSelect>
+        {(filtroCliente||filtroCategoria) && (
+          <button onClick={()=>{setFiltroCliente("");setFiltroCategoria("");}} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:9,padding:"0 16px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12}}>✕ Quitar filtros</button>
+        )}
+      </div>
+
+      {loading ? <Spinner/> : ordenesFiltradas.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>🛠️</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin órdenes de trabajo</div>
+          <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera orden</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Folio","Cliente","Categoría","Subcategoría","Descripción","Fecha","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ordenesFiltradas.map(ot=>(
+                <tr key={ot.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{ot.folio}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>{ot.cliente_nombre}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <span style={{background:C.navyDim,color:C.navy,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{ot.categoria}</span>
+                  </td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{ot.subcategoria||"—"}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ot.descripcion}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12,whiteSpace:"nowrap"}}>{new Date(ot.created_at).toLocaleDateString("es-MX")}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>descargarPDF(ot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>eliminar(ot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+
+  // ── VISTA NUEVA ORDEN ──
+  return (
+    <div style={{padding:28,maxWidth:760}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <button onClick={()=>{setVista("historial");resetForm();}} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
+        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Nueva Orden de Trabajo</h1>
+      </div>
+
+      <Card style={{marginBottom:16}}>
+        <FieldSelect label="Cliente *" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
+          <option value="">— Selecciona un cliente —</option>
+          {clientes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </FieldSelect>
+        {clientes.length===0 && <div style={{color:C.red,fontSize:12,marginTop:-8,marginBottom:14}}>No hay clientes registrados. Da de alta un cliente primero en el módulo Clientes.</div>}
+
+        <FieldSelect label="Categoría *" value={categoria} onChange={e=>{setCategoria(e.target.value);setSubcategoria("");}}>
+          <option value="">— Selecciona una categoría —</option>
+          {OT_CATEGORIAS.map(c=><option key={c} value={c}>{c}</option>)}
+        </FieldSelect>
+
+        {subcategoriasActuales.length > 0 && (
+          <FieldSelect label={`${categoria === "SAT" ? "Tipo de trámite" : categoria === "IMSS" ? "Tipo de movimiento" : categoria === "Cálculos" ? "Tipo de cálculo" : "Tipo"} *`} value={subcategoria} onChange={e=>setSubcategoria(e.target.value)}>
+            <option value="">— Selecciona —</option>
+            {subcategoriasActuales.map(s=><option key={s} value={s}>{s}</option>)}
+          </FieldSelect>
+        )}
+
+        {/* Declaración: casillas + fecha */}
+        {categoria === "Declaración" && (
+          <div style={{marginBottom:16,padding:14,background:C.navyDim,borderRadius:12,border:`1px solid ${C.navy}22`}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:13,marginBottom:10}}>¿Qué se presentó?</div>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:12}}>
+              {[["isr","Mensual ISR"],["iva","Mensual IVA"],["anual","Anual"],["otra","Otra"]].map(([k,l])=>(
+                <label key={k} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13,color:C.text}}>
+                  <input type="checkbox" checked={declCasillas[k]} onChange={e=>setDeclCasillas(p=>({...p,[k]:e.target.checked}))} style={{width:16,height:16,cursor:"pointer"}}/>
+                  {l}
+                </label>
+              ))}
+            </div>
+            <Input label="Fecha de presentación" type="date" value={declFecha} onChange={e=>setDeclFecha(e.target.value)} style={{marginBottom:0}}/>
+          </div>
+        )}
+
+        {/* Colaborador: IMSS específicos o cualquier Cálculos */}
+        {requiereColaborador() && (
+          <div style={{marginBottom:16,padding:14,background:C.navyDim,borderRadius:12,border:`1px solid ${C.navy}22`}}>
+            <div style={{color:C.navy,fontWeight:700,fontSize:13,marginBottom:10}}>Datos del colaborador</div>
+            <Input label="Nombre del colaborador *" value={colaboradorNombre} onChange={e=>setColaboradorNombre(e.target.value)} placeholder="Nombre completo" style={{marginBottom:12}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Input label="Fecha del movimiento" type="date" value={fechaMovimiento} onChange={e=>setFechaMovimiento(e.target.value)} style={{marginBottom:0}}/>
+              <Input label="SDI $" type="number" value={sdi} onChange={e=>setSdi(e.target.value)} placeholder="Ej: 450.50" style={{marginBottom:0}}/>
+            </div>
+          </div>
+        )}
+
+        {/* Descripción obligatoria */}
+        <div style={{marginBottom:8}}>
+          <div style={{color:C.muted,fontSize:11,marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Descripción del movimiento * <span style={{color:C.red}}>(obligatorio)</span></div>
+          <textarea value={descripcion} onChange={e=>setDescripcion(e.target.value)} rows={4} placeholder="Describe qué movimiento se realizó..."
+            style={{width:"100%",background:descripcion.trim()?C.panel:C.redBg,border:`1.5px solid ${descripcion.trim()?C.border:C.red+"66"}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
+          {!descripcion.trim() && <div style={{color:C.red,fontSize:11,marginTop:4}}>La descripción es obligatoria para poder generar la orden.</div>}
+        </div>
+      </Card>
+
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={()=>{setVista("historial");resetForm();}}>Cancelar</Btn>
+        <Btn onClick={guardar} loading={saving} disabled={!formValido()}>Generar orden de trabajo</Btn>
+      </div>
+    </div>
+  );
+}
+
 // ── FYNCO ─────────────────────────────────────────────────────────────────
 
 const FYNCO_PAQUETES_FOLIOS = [
@@ -4402,6 +4757,7 @@ export default function App() {
     chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} user={user} />,
     nomina: <CalculosModule />,
+    ordenes: <OrdenesTrabajoModule user={user} />,
     cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
     fynco_dashboard: <FyncoDashboard />,
