@@ -1517,6 +1517,12 @@ function ClientesModule({ onNavigate, user }) {
         const morales = clients.filter(c => (clientDatosMap[c.id]?.tipo_persona || "fisica") === "moral");
         const fisicas = clients.filter(c => (clientDatosMap[c.id]?.tipo_persona || "fisica") === "fisica");
 
+        const getRegPatronal = (d) => {
+          const otros = Array.isArray(d.otros_accesos) ? d.otros_accesos : [];
+          const found = otros.find(o => (o.sistema||"").toLowerCase().includes("registro patronal"));
+          return found ? found.usuario : "";
+        };
+
         const TablaClientes = ({ titulo, icono, lista, color, bg }) => (
           <div style={{ marginBottom:28 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
@@ -1528,11 +1534,12 @@ function ClientesModule({ onNavigate, user }) {
               <Card style={{ padding:20, textAlign:"center", color:C.muted, fontSize:13 }}>Sin clientes en esta categoría</Card>
             ) : (
               <Card style={{ padding:0, overflow:"hidden" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1300 }}>
                   <thead>
                     <tr style={{ background:C.panel }}>
-                      {["Nombre","RFC","Accesos principales","Tareas","Acciones"].map(h=>(
-                        <th key={h} style={{ padding:"10px 14px", color:C.muted, fontSize:11, fontWeight:700, textAlign:"left", textTransform:"uppercase", letterSpacing:"0.05em" }}>{h}</th>
+                      {["Nombre","RFC","Reg. Patronal","FIEL","CSD","IDSE","SIPARE","INFONAVIT","Tareas","Acciones"].map(h=>(
+                        <th key={h} style={{ padding:"10px 14px", color:C.muted, fontSize:11, fontWeight:700, textAlign:"left", textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1542,26 +1549,25 @@ function ClientesModule({ onNavigate, user }) {
                       const ctaxes = taxes.filter(t=>t.client===client.name);
                       const ctasks = tasks.filter(t=>t.client===client.name);
                       const pending = ctaxes.filter(t=>t.status==="pendiente").length;
-                      const accesos = [];
-                      if (d.sat_fiel_pass) accesos.push(`FIEL: ${d.sat_fiel_pass}`);
-                      if (d.sat_csd_pass) accesos.push(`CSD: ${d.sat_csd_pass}`);
-                      if (d.imss_idse_user || d.imss_idse_pass) accesos.push(`IDSE: ${d.imss_idse_user||"—"} / ${d.imss_idse_pass||"—"}`);
-                      if (d.imss_sipare_user || d.imss_sipare_pass) accesos.push(`SIPARE: ${d.imss_sipare_user||"—"} / ${d.imss_sipare_pass||"—"}`);
-                      if (d.infonavit_portal_user || d.infonavit_portal_pass) accesos.push(`INFONAVIT: ${d.infonavit_portal_user||"—"} / ${d.infonavit_portal_pass||"—"}`);
+                      const regPatronal = getRegPatronal(d);
+                      const cellStyle = { padding:"12px 14px", color:C.muted, fontSize:11.5, whiteSpace:"nowrap" };
                       return (
                         <tr key={client.id} className="row-hover" style={{ borderBottom:`1px solid ${C.border}` }}>
-                          <td style={{ padding:"12px 14px" }}>
+                          <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
                             <span onClick={()=>setSelectedClient(client)} style={{ color:C.navy, fontWeight:700, fontSize:13, cursor:"pointer", textDecoration:"underline dotted" }}>{client.name}</span>
                           </td>
-                          <td style={{ padding:"12px 14px", color:C.text, fontSize:12, fontFamily:"monospace" }}>{d.rfc || "—"}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontSize:11, lineHeight:1.6, maxWidth:340 }}>
-                            {accesos.length === 0 ? "—" : accesos.map((a,i)=>(<div key={i}>{a}</div>))}
-                          </td>
-                          <td style={{ padding:"12px 14px" }}>
+                          <td style={{ padding:"12px 14px", color:C.text, fontSize:12, fontFamily:"monospace", whiteSpace:"nowrap" }}>{d.rfc || "—"}</td>
+                          <td style={cellStyle}>{regPatronal || "—"}</td>
+                          <td style={cellStyle}>{d.sat_fiel_pass || "—"}</td>
+                          <td style={cellStyle}>{d.sat_csd_pass || "—"}</td>
+                          <td style={cellStyle}>{(d.imss_idse_user || d.imss_idse_pass) ? `${d.imss_idse_user||"—"} / ${d.imss_idse_pass||"—"}` : "—"}</td>
+                          <td style={cellStyle}>{(d.imss_sipare_user || d.imss_sipare_pass) ? `${d.imss_sipare_user||"—"} / ${d.imss_sipare_pass||"—"}` : "—"}</td>
+                          <td style={cellStyle}>{(d.infonavit_portal_user || d.infonavit_portal_pass) ? `${d.infonavit_portal_user||"—"} / ${d.infonavit_portal_pass||"—"}` : "—"}</td>
+                          <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
                             <span onClick={()=>onNavigate("tareas", client.name, null)} style={{ cursor:"pointer", color:ctasks.length>0?C.accent:C.muted, fontWeight:700, fontSize:13 }}>{ctasks.length}</span>
                             {pending>0 && <span style={{ color:C.yellow, fontSize:10, marginLeft:6 }}>({pending} pend.)</span>}
                           </td>
-                          <td style={{ padding:"12px 14px" }}>
+                          <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
                             <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:15, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
                           </td>
                         </tr>
@@ -1569,6 +1575,7 @@ function ClientesModule({ onNavigate, user }) {
                     })}
                   </tbody>
                 </table>
+                </div>
               </Card>
             )}
           </div>
