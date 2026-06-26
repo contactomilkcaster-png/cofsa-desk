@@ -1419,16 +1419,22 @@ function ClientesModule({ onNavigate, user }) {
     { campo:"imss_cert_exp", label:"Certificado IDSE" },
   ];
 
+  const [clientDatosMap, setClientDatosMap] = useState({});
+
   const load = async () => {
     setLoading(true);
-    const [c, t, k] = await Promise.all([
+    const [c, t, k, cd] = await Promise.all([
       supabase.from("clientes").select("*").order("name"),
       supabase.from("impuestos").select("*"),
       supabase.from("tareas").select("*"),
+      supabase.from("cliente_datos").select("*"),
     ]);
     setClients(c.data || []);
     setTaxes(t.data || []);
     setTasks(k.data || []);
+    const map = {};
+    (cd.data || []).forEach(d => { map[d.cliente_id] = d; });
+    setClientDatosMap(map);
     setLoading(false);
   };
 
@@ -1507,41 +1513,74 @@ function ClientesModule({ onNavigate, user }) {
           <div style={{ fontSize:14, fontWeight:500 }}>No hay clientes aún</div>
           <div style={{ fontSize:12, marginTop:4 }}>Haz clic en "+ Agregar cliente" para comenzar</div>
         </div>
-      ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:16 }}>
-          {clients.map(client=>{
-            const ctaxes = taxes.filter(t=>t.client===client.name);
-            const ctasks = tasks.filter(t=>t.client===client.name);
-            const pending = ctaxes.filter(t=>t.status==="pendiente").length;
-            const presented = ctaxes.filter(t=>t.status==="presentado").length;
-            return (
-              <div key={client.id} className="card" style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:14, padding:22, boxShadow:"0 1px 4px rgba(0,0,0,0.05)", transition:"all 0.2s" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-                  <div style={{ width:44, height:44, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🏢</div>
-                  <div onClick={()=>setSelectedClient(client)} style={{ flex:1, color:C.navy, fontWeight:700, fontSize:14, lineHeight:1.3, cursor:"pointer", textDecoration:"underline dotted" }} title="Ver expediente">{client.name}</div>
-                  <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:16, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
-                </div>
-                <div style={{ display:"flex", gap:8 }}>
-                  {[
-                    { lbl:"Pendientes", val:pending, color:C.yellow, bg:C.yellowBg, module:"impuestos", filter:"pendiente" },
-                    { lbl:"Presentados", val:presented, color:C.green, bg:C.greenBg, module:"impuestos", filter:"presentado" },
-                    { lbl:"Tareas", val:ctasks.length, color:C.accent, bg:C.navyDim, module:"tareas", filter:null },
-                  ].map(({lbl,val,color,bg,module,filter})=>(
-                    <div key={lbl} onClick={()=>onNavigate(module, client.name, filter)}
-                      style={{ flex:1, background:bg, borderRadius:9, padding:"10px 8px", textAlign:"center", cursor:"pointer", transition:"transform 0.15s, box-shadow 0.15s" }}
-                      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 4px 12px ${color}33`}}
-                      onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
-                      <div style={{ color, fontSize:20, fontWeight:800 }}>{val}</div>
-                      <div style={{ color, fontSize:10, marginTop:2, fontWeight:600, opacity:0.85 }}>{lbl}</div>
-                      <div style={{ color, fontSize:9, marginTop:1, opacity:0.5 }}>ver →</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      ) : (() => {
+        const morales = clients.filter(c => (clientDatosMap[c.id]?.tipo_persona || "fisica") === "moral");
+        const fisicas = clients.filter(c => (clientDatosMap[c.id]?.tipo_persona || "fisica") === "fisica");
+
+        const TablaClientes = ({ titulo, icono, lista, color, bg }) => (
+          <div style={{ marginBottom:28 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+              <span style={{ background:bg, padding:"5px 10px", borderRadius:8, fontSize:15 }}>{icono}</span>
+              <div style={{ color:C.navy, fontWeight:800, fontSize:16 }}>{titulo}</div>
+              <span style={{ background:bg, color, borderRadius:10, padding:"2px 10px", fontSize:12, fontWeight:700 }}>{lista.length}</span>
+            </div>
+            {lista.length === 0 ? (
+              <Card style={{ padding:20, textAlign:"center", color:C.muted, fontSize:13 }}>Sin clientes en esta categoría</Card>
+            ) : (
+              <Card style={{ padding:0, overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr style={{ background:C.panel }}>
+                      {["Nombre","RFC","Accesos principales","Tareas","Acciones"].map(h=>(
+                        <th key={h} style={{ padding:"10px 14px", color:C.muted, fontSize:11, fontWeight:700, textAlign:"left", textTransform:"uppercase", letterSpacing:"0.05em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lista.map(client=>{
+                      const d = clientDatosMap[client.id] || {};
+                      const ctaxes = taxes.filter(t=>t.client===client.name);
+                      const ctasks = tasks.filter(t=>t.client===client.name);
+                      const pending = ctaxes.filter(t=>t.status==="pendiente").length;
+                      const accesos = [];
+                      if (d.sat_fiel_pass) accesos.push(`FIEL: ${d.sat_fiel_pass}`);
+                      if (d.sat_csd_pass) accesos.push(`CSD: ${d.sat_csd_pass}`);
+                      if (d.imss_idse_user || d.imss_idse_pass) accesos.push(`IDSE: ${d.imss_idse_user||"—"} / ${d.imss_idse_pass||"—"}`);
+                      if (d.imss_sipare_user || d.imss_sipare_pass) accesos.push(`SIPARE: ${d.imss_sipare_user||"—"} / ${d.imss_sipare_pass||"—"}`);
+                      if (d.infonavit_portal_user || d.infonavit_portal_pass) accesos.push(`INFONAVIT: ${d.infonavit_portal_user||"—"} / ${d.infonavit_portal_pass||"—"}`);
+                      return (
+                        <tr key={client.id} className="row-hover" style={{ borderBottom:`1px solid ${C.border}` }}>
+                          <td style={{ padding:"12px 14px" }}>
+                            <span onClick={()=>setSelectedClient(client)} style={{ color:C.navy, fontWeight:700, fontSize:13, cursor:"pointer", textDecoration:"underline dotted" }}>{client.name}</span>
+                          </td>
+                          <td style={{ padding:"12px 14px", color:C.text, fontSize:12, fontFamily:"monospace" }}>{d.rfc || "—"}</td>
+                          <td style={{ padding:"12px 14px", color:C.muted, fontSize:11, lineHeight:1.6, maxWidth:340 }}>
+                            {accesos.length === 0 ? "—" : accesos.map((a,i)=>(<div key={i}>{a}</div>))}
+                          </td>
+                          <td style={{ padding:"12px 14px" }}>
+                            <span onClick={()=>onNavigate("tareas", client.name, null)} style={{ cursor:"pointer", color:ctasks.length>0?C.accent:C.muted, fontWeight:700, fontSize:13 }}>{ctasks.length}</span>
+                            {pending>0 && <span style={{ color:C.yellow, fontSize:10, marginLeft:6 }}>({pending} pend.)</span>}
+                          </td>
+                          <td style={{ padding:"12px 14px" }}>
+                            <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:15, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Card>
+            )}
+          </div>
+        );
+
+        return (
+          <div>
+            <TablaClientes titulo="Personas Morales" icono="🏢" lista={morales} color={C.navy} bg={C.navyDim} />
+            <TablaClientes titulo="Personas Físicas" icono="👤" lista={fisicas} color={C.accent} bg={C.navyDim} />
+          </div>
+        );
+      })()}
 
       {showAdd && (
         <Modal title="Agregar nuevo cliente" onClose={()=>{setShowAdd(false);resetNewForm();}} width={620}>
