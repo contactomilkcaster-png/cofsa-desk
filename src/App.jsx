@@ -1399,10 +1399,25 @@ function ClientesModule({ onNavigate, user }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [otrosAccesosNew, setOtrosAccesosNew] = useState([]);
+  const [newForm, setNewForm] = useState({
+    tipo_persona:"fisica",
+    rfc:"", razon_social:"", regimen_fiscal:"",
+    correo2:"", telefono:"", representante_legal:"", rfc_representante:"",
+    sat_fiel_pass:"", sat_fiel_exp:"", sat_csd_pass:"", sat_csd_exp:"",
+    imss_idse_user:"", imss_idse_pass:"", imss_sipare_user:"", imss_sipare_pass:"", imss_cert_exp:"",
+    infonavit_portal_user:"", infonavit_portal_pass:"",
+    estado_user:"", estado_pass:"",
+  });
+
+  const VENCIMIENTOS_CONFIG = [
+    { campo:"sat_fiel_exp", label:"FIEL (e.firma)" },
+    { campo:"sat_csd_exp", label:"Certificado de Sellos Digitales (CSD)" },
+    { campo:"imss_cert_exp", label:"Certificado IDSE" },
+  ];
 
   const load = async () => {
     setLoading(true);
@@ -1419,12 +1434,51 @@ function ClientesModule({ onNavigate, user }) {
 
   useEffect(()=>{ load(); },[]);
 
+  const resetNewForm = () => {
+    setNewForm({
+      tipo_persona:"fisica",
+      rfc:"", razon_social:"", regimen_fiscal:"",
+      correo2:"", telefono:"", representante_legal:"", rfc_representante:"",
+      sat_fiel_pass:"", sat_fiel_exp:"", sat_csd_pass:"", sat_csd_exp:"",
+      imss_idse_user:"", imss_idse_pass:"", imss_sipare_user:"", imss_sipare_pass:"", imss_cert_exp:"",
+      infonavit_portal_user:"", infonavit_portal_pass:"",
+      estado_user:"", estado_pass:"",
+    });
+    setOtrosAccesosNew([]);
+  };
+
+  const crearTareasVencimientoNew = async (clienteNombre, formData) => {
+    const hoy = new Date();
+    for (const cfg of VENCIMIENTOS_CONFIG) {
+      const fechaStr = formData[cfg.campo];
+      if (!fechaStr) continue;
+      const diasRestantes = Math.ceil((new Date(fechaStr) - hoy) / (1000*60*60*24));
+      if (diasRestantes > 60) continue;
+      await supabase.from("tareas").insert([{
+        title: `Renovar ${cfg.label} — ${clienteNombre}`,
+        description: `El documento "${cfg.label}" del cliente ${clienteNombre} vence el ${fechaStr}. Se recomienda iniciar el proceso de renovación con al menos 2 meses de anticipación.`,
+        priority: diasRestantes <= 15 ? "alta" : "media",
+        due_date: fechaStr,
+        client: clienteNombre,
+        assigned_to: user?.id || null,
+        status: "todo",
+        created_by: user?.id || null,
+      }]);
+    }
+  };
+
   const addClient = async () => {
-    if (!newName.trim()) return;
+    if (!newForm.razon_social.trim()) return;
     setSaving(true);
-    await supabase.from("clientes").insert([{ name: newName.trim() }]);
+    const { data: clienteCreado, error } = await supabase.from("clientes").insert([{ name: newForm.razon_social.trim() }]).select().single();
+    if (error || !clienteCreado) { setSaving(false); return; }
+    await supabase.from("cliente_datos").insert([{
+      ...newForm, cliente_id:clienteCreado.id, otros_accesos:otrosAccesosNew, updated_at:new Date().toISOString(),
+    }]);
+    await crearTareasVencimientoNew(clienteCreado.name, newForm);
     setSaving(false);
-    setNewName(""); setShowAdd(false);
+    resetNewForm();
+    setShowAdd(false);
     load();
   };
 
@@ -1490,12 +1544,125 @@ function ClientesModule({ onNavigate, user }) {
       )}
 
       {showAdd && (
-        <Modal title="Agregar nuevo cliente" onClose={()=>setShowAdd(false)} width={420}>
-          <Input label="Nombre del cliente *" value={newName} onChange={e=>setNewName(e.target.value)}
-            placeholder="Ej: Grupo Regio S.A." onKeyDown={e=>e.key==="Enter"&&addClient()} />
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
-            <Btn onClick={addClient} loading={saving} disabled={!newName.trim()}>Agregar cliente</Btn>
+        <Modal title="Agregar nuevo cliente" onClose={()=>{setShowAdd(false);resetNewForm();}} width={620}>
+          {/* Tipo de persona */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>👤</span> Tipo de persona
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              {[["fisica","Persona Física"],["moral","Persona Moral"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setNewForm(p=>({...p,tipo_persona:v}))} style={{
+                  padding:"9px 18px", borderRadius:9, border:`1.5px solid ${newForm.tipo_persona===v?C.navy:C.border}`,
+                  background:newForm.tipo_persona===v?C.navy:"transparent", color:newForm.tipo_persona===v?C.white:C.muted,
+                  cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13, transition:"all 0.15s",
+                }}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Datos base */}
+          <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>📄</span> Datos {newForm.tipo_persona==="fisica"?"Personales":"de la Empresa"}
+          </div>
+          {newForm.tipo_persona==="fisica" ? (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Nombre del cliente *" value={newForm.razon_social} onChange={e=>setNewForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre completo" />
+                <Input label="RFC" value={newForm.rfc} onChange={e=>setNewForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Correo 1" value={newForm.regimen_fiscal} onChange={e=>setNewForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="correo@ejemplo.com" />
+                <Input label="Correo 2" value={newForm.correo2} onChange={e=>setNewForm(p=>({...p,correo2:e.target.value}))} placeholder="correo2@ejemplo.com (opcional)" />
+              </div>
+              <Input label="Teléfono" value={newForm.telefono} onChange={e=>setNewForm(p=>({...p,telefono:e.target.value}))} placeholder="81 1234 5678" />
+            </>
+          ) : (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Razón Social *" value={newForm.razon_social} onChange={e=>setNewForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre o razón social" />
+                <Input label="RFC" value={newForm.rfc} onChange={e=>setNewForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Correo 1" value={newForm.regimen_fiscal} onChange={e=>setNewForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="correo@empresa.com" />
+                <Input label="Correo 2" value={newForm.correo2} onChange={e=>setNewForm(p=>({...p,correo2:e.target.value}))} placeholder="correo2@empresa.com (opcional)" />
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Representante Legal" value={newForm.representante_legal} onChange={e=>setNewForm(p=>({...p,representante_legal:e.target.value}))} placeholder="Nombre del representante legal" />
+                <Input label="RFC Representante Legal" value={newForm.rfc_representante} onChange={e=>setNewForm(p=>({...p,rfc_representante:e.target.value}))} placeholder="XAXX010101000" />
+              </div>
+              <Input label="Teléfono" value={newForm.telefono} onChange={e=>setNewForm(p=>({...p,telefono:e.target.value}))} placeholder="81 1234 5678" />
+            </>
+          )}
+
+          {/* SAT */}
+          <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.yellowBg, padding:"4px 8px", borderRadius:7 }}>🔐</span> SAT
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Contraseña FIEL" value={newForm.sat_fiel_pass} onChange={e=>setNewForm(p=>({...p,sat_fiel_pass:e.target.value}))} placeholder="Contraseña de la e.firma" />
+            <Input label="Fecha de expiración FIEL" type="date" value={newForm.sat_fiel_exp} onChange={e=>setNewForm(p=>({...p,sat_fiel_exp:e.target.value}))} />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Contraseña CSD" value={newForm.sat_csd_pass} onChange={e=>setNewForm(p=>({...p,sat_csd_pass:e.target.value}))} placeholder="Contraseña Sellos Digitales" />
+            <Input label="Fecha de expiración CSD" type="date" value={newForm.sat_csd_exp} onChange={e=>setNewForm(p=>({...p,sat_csd_exp:e.target.value}))} />
+          </div>
+
+          {/* IMSS */}
+          <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.greenBg, padding:"4px 8px", borderRadius:7 }}>🏥</span> IMSS
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Usuario IDSE" value={newForm.imss_idse_user} onChange={e=>setNewForm(p=>({...p,imss_idse_user:e.target.value}))} placeholder="Usuario IDSE" />
+            <Input label="Contraseña IDSE" value={newForm.imss_idse_pass} onChange={e=>setNewForm(p=>({...p,imss_idse_pass:e.target.value}))} placeholder="Contraseña IDSE" />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Usuario SIPARE" value={newForm.imss_sipare_user} onChange={e=>setNewForm(p=>({...p,imss_sipare_user:e.target.value}))} placeholder="Usuario SIPARE" />
+            <Input label="Contraseña SIPARE" value={newForm.imss_sipare_pass} onChange={e=>setNewForm(p=>({...p,imss_sipare_pass:e.target.value}))} placeholder="Contraseña SIPARE" />
+          </div>
+          <Input label="Fecha de expiración Certificado IDSE" type="date" value={newForm.imss_cert_exp} onChange={e=>setNewForm(p=>({...p,imss_cert_exp:e.target.value}))} />
+
+          {/* INFONAVIT */}
+          <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>🏠</span> INFONAVIT
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Usuario Portal INFONAVIT" value={newForm.infonavit_portal_user} onChange={e=>setNewForm(p=>({...p,infonavit_portal_user:e.target.value}))} placeholder="Usuario" />
+            <Input label="Contraseña Portal INFONAVIT" value={newForm.infonavit_portal_pass} onChange={e=>setNewForm(p=>({...p,infonavit_portal_pass:e.target.value}))} placeholder="Contraseña" />
+          </div>
+
+          {/* ESTADO — solo persona moral */}
+          {newForm.tipo_persona==="moral" && (
+            <>
+              <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:C.redBg, padding:"4px 8px", borderRadius:7 }}>🏛️</span> ESTADO
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Usuario" value={newForm.estado_user} onChange={e=>setNewForm(p=>({...p,estado_user:e.target.value}))} placeholder="Usuario portal estatal" />
+                <Input label="Contraseña" value={newForm.estado_pass} onChange={e=>setNewForm(p=>({...p,estado_pass:e.target.value}))} placeholder="Contraseña" />
+              </div>
+            </>
+          )}
+
+          {/* Otros accesos */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"18px 0 10px" }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:14, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>🔗</span> Otros accesos
+            </div>
+            <Btn variant="ghost" onClick={()=>setOtrosAccesosNew(p=>[...p,{sistema:"",usuario:"",password:""}])} style={{ padding:"5px 12px", fontSize:12 }}>+ Agregar</Btn>
+          </div>
+          {otrosAccesosNew.map((o,i)=>(
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, marginBottom:10, alignItems:"end" }}>
+              <Input label={i===0?"Sistema":""} value={o.sistema} onChange={e=>setOtrosAccesosNew(p=>p.map((x,idx)=>idx===i?{...x,sistema:e.target.value}:x))} placeholder="Ej: IMPI, ISSSTE…" style={{ marginBottom:0 }} />
+              <Input label={i===0?"Usuario":""} value={o.usuario} onChange={e=>setOtrosAccesosNew(p=>p.map((x,idx)=>idx===i?{...x,usuario:e.target.value}:x))} placeholder="Usuario" style={{ marginBottom:0 }} />
+              <Input label={i===0?"Contraseña":""} value={o.password} onChange={e=>setOtrosAccesosNew(p=>p.map((x,idx)=>idx===i?{...x,password:e.target.value}:x))} placeholder="Contraseña" style={{ marginBottom:0 }} />
+              <button onClick={()=>setOtrosAccesosNew(p=>p.filter((_,idx)=>idx!==i))} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"10px 12px", fontFamily:"inherit" }}>✕</button>
+            </div>
+          ))}
+
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:18 }}>
+            <Btn variant="ghost" onClick={()=>{setShowAdd(false);resetNewForm();}}>Cancelar</Btn>
+            <Btn onClick={addClient} loading={saving} disabled={!newForm.razon_social.trim()}>Agregar cliente</Btn>
           </div>
         </Modal>
       )}
