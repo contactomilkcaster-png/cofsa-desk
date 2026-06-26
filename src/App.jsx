@@ -976,7 +976,7 @@ function ChatModule({ user }) {
 }
 
 // ── EXPEDIENTE CLIENTE ────────────────────────────────────────────────────
-function ExpedienteCliente({ client, onBack }) {
+function ExpedienteCliente({ client, onBack, user }) {
   const [tab, setTab] = useState("datos");
   const [datos, setDatos] = useState(null);
   const [docs, setDocs] = useState([]);
@@ -986,7 +986,15 @@ function ExpedienteCliente({ client, onBack }) {
   const [showPass, setShowPass] = useState({});
   const [otrosAccesos, setOtrosAccesos] = useState([]);
   const [docForm, setDocForm] = useState({ nombre:"", fecha_emision:"", fecha_vencimiento:"", notas:"", files:[] });
-  const [form, setForm] = useState({ rfc:"", razon_social:"", regimen_fiscal:"", sat_usuario:"", sat_password:"", imss_usuario:"", imss_password:"", infonavit_usuario:"", infonavit_password:"" });
+  const [form, setForm] = useState({
+    tipo_persona:"fisica",
+    rfc:"", razon_social:"", regimen_fiscal:"",
+    correo2:"", telefono:"", representante_legal:"", rfc_representante:"",
+    sat_fiel_pass:"", sat_fiel_exp:"", sat_csd_pass:"", sat_csd_exp:"",
+    imss_idse_user:"", imss_idse_pass:"", imss_sipare_user:"", imss_sipare_pass:"", imss_cert_exp:"",
+    infonavit_portal_user:"", infonavit_portal_pass:"",
+    estado_user:"", estado_pass:"",
+  });
 
   const TIPOS_DOC = ["Constancia de Situación Fiscal","Opinión de Cumplimiento SAT","Comprobante de pago IMSS","e.firma (.cer)","e.firma (.key)","Acta Constitutiva","Poder Notarial","Otro"];
 
@@ -1011,7 +1019,15 @@ function ExpedienteCliente({ client, onBack }) {
       supabase.from("cliente_documentos").select("*").eq("cliente_id", client.id).order("fecha_vencimiento"),
     ]);
     if (d.data) {
-      setForm({ rfc:d.data.rfc||"", razon_social:d.data.razon_social||"", regimen_fiscal:d.data.regimen_fiscal||"", sat_usuario:d.data.sat_usuario||"", sat_password:d.data.sat_password||"", imss_usuario:d.data.imss_usuario||"", imss_password:d.data.imss_password||"", infonavit_usuario:d.data.infonavit_usuario||"", infonavit_password:d.data.infonavit_password||"" });
+      setForm({
+        tipo_persona:d.data.tipo_persona||"fisica",
+        rfc:d.data.rfc||"", razon_social:d.data.razon_social||"", regimen_fiscal:d.data.regimen_fiscal||"",
+        correo2:d.data.correo2||"", telefono:d.data.telefono||"", representante_legal:d.data.representante_legal||"", rfc_representante:d.data.rfc_representante||"",
+        sat_fiel_pass:d.data.sat_fiel_pass||"", sat_fiel_exp:d.data.sat_fiel_exp||"", sat_csd_pass:d.data.sat_csd_pass||"", sat_csd_exp:d.data.sat_csd_exp||"",
+        imss_idse_user:d.data.imss_idse_user||"", imss_idse_pass:d.data.imss_idse_pass||"", imss_sipare_user:d.data.imss_sipare_user||"", imss_sipare_pass:d.data.imss_sipare_pass||"", imss_cert_exp:d.data.imss_cert_exp||"",
+        infonavit_portal_user:d.data.infonavit_portal_user||"", infonavit_portal_pass:d.data.infonavit_portal_pass||"",
+        estado_user:d.data.estado_user||"", estado_pass:d.data.estado_pass||"",
+      });
       setOtrosAccesos(d.data.otros_accesos || []);
       setDatos(d.data);
     }
@@ -1020,11 +1036,44 @@ function ExpedienteCliente({ client, onBack }) {
 
   useEffect(()=>{ load(); },[client.id]);
 
+  const VENCIMIENTOS_CONFIG = [
+    { campo:"sat_fiel_exp", label:"FIEL (e.firma)" },
+    { campo:"sat_csd_exp", label:"Certificado de Sellos Digitales (CSD)" },
+    { campo:"imss_cert_exp", label:"Certificado IDSE" },
+  ];
+
+  const crearTareasVencimiento = async (formData) => {
+    const hoy = new Date();
+    for (const cfg of VENCIMIENTOS_CONFIG) {
+      const fechaStr = formData[cfg.campo];
+      if (!fechaStr) continue;
+      const fechaExp = new Date(fechaStr);
+      const diasRestantes = Math.ceil((fechaExp - hoy) / (1000*60*60*24));
+      // Solo crear tarea si faltan 60 días o menos (y no está vencido por más de 60 días, para evitar duplicar tareas viejas)
+      if (diasRestantes > 60) continue;
+      const tituloTarea = `Renovar ${cfg.label} — ${client.name}`;
+      // Evitar duplicados: buscar si ya existe una tarea abierta con este título
+      const { data: existente } = await supabase.from("tareas").select("id").eq("title", tituloTarea).neq("status","done").maybeSingle();
+      if (existente) continue;
+      await supabase.from("tareas").insert([{
+        title: tituloTarea,
+        description: `El documento "${cfg.label}" del cliente ${client.name} vence el ${fechaStr}. Se recomienda iniciar el proceso de renovación con al menos 2 meses de anticipación.`,
+        priority: diasRestantes <= 15 ? "alta" : "media",
+        due_date: fechaStr,
+        client: client.name,
+        assigned_to: user?.id || null,
+        status: "todo",
+        created_by: user?.id || null,
+      }]);
+    }
+  };
+
   const saveDatos = async () => {
     setSaving(true);
     const payload = { ...form, cliente_id:client.id, otros_accesos:otrosAccesos, updated_at:new Date().toISOString() };
     if (datos) await supabase.from("cliente_datos").update(payload).eq("id", datos.id);
     else await supabase.from("cliente_datos").insert([payload]);
+    await crearTareasVencimiento(form);
     setSaving(false);
     load();
   };
@@ -1093,68 +1142,136 @@ function ExpedienteCliente({ client, onBack }) {
       {/* ── TAB DATOS ── */}
       {tab==="datos" && (
         <div style={{ animation:"fadeUp 0.25s ease" }}>
+          {/* Tipo de persona */}
           <Card style={{ marginBottom:16 }}>
-            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>📄</span> Datos Fiscales
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>👤</span> Tipo de persona
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="RFC" value={form.rfc} onChange={e=>setForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
-              <Input label="Razón Social" value={form.razon_social} onChange={e=>setForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre o razón social" />
+            <div style={{ display:"flex", gap:8 }}>
+              {[["fisica","Persona Física"],["moral","Persona Moral"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setForm(p=>({...p,tipo_persona:v}))} style={{
+                  padding:"10px 20px", borderRadius:9, border:`1.5px solid ${form.tipo_persona===v?C.navy:C.border}`,
+                  background:form.tipo_persona===v?C.navy:"transparent", color:form.tipo_persona===v?C.white:C.muted,
+                  cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13, transition:"all 0.15s",
+                }}>{l}</button>
+              ))}
             </div>
-            <Input label="Régimen Fiscal" value={form.regimen_fiscal} onChange={e=>setForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="Ej: 601 - General de Ley Personas Morales" />
           </Card>
 
+          {/* Datos base — dinámico según tipo de persona */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.yellowBg, padding:"5px 9px", borderRadius:8 }}>🔐</span> Accesos SAT
+              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>📄</span> Datos {form.tipo_persona==="fisica"?"Personales":"de la Empresa"}
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Usuario SAT" value={form.sat_usuario} onChange={e=>setForm(p=>({...p,sat_usuario:e.target.value}))} placeholder="RFC o usuario" />
-              <div style={{ marginBottom:14 }}>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña SAT</div>
-                <div style={{ position:"relative" }}>
-                  <input type={showPass.sat?"text":"password"} value={form.sat_password} onChange={e=>setForm(p=>({...p,sat_password:e.target.value}))}
-                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                  <button onClick={()=>setShowPass(p=>({...p,sat:!p.sat}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.sat?"🙈":"👁️"}</button>
+            {form.tipo_persona==="fisica" ? (
+              <>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Nombre del cliente" value={form.razon_social} onChange={e=>setForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre completo" />
+                  <Input label="RFC" value={form.rfc} onChange={e=>setForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
                 </div>
-              </div>
-            </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Correo 1" value={form.regimen_fiscal} onChange={e=>setForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="correo@ejemplo.com" />
+                  <Input label="Correo 2" value={form.correo2} onChange={e=>setForm(p=>({...p,correo2:e.target.value}))} placeholder="correo2@ejemplo.com (opcional)" />
+                </div>
+                <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))} placeholder="81 1234 5678" />
+              </>
+            ) : (
+              <>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Razón Social" value={form.razon_social} onChange={e=>setForm(p=>({...p,razon_social:e.target.value}))} placeholder="Nombre o razón social" />
+                  <Input label="RFC" value={form.rfc} onChange={e=>setForm(p=>({...p,rfc:e.target.value}))} placeholder="XAXX010101000" />
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Correo 1" value={form.regimen_fiscal} onChange={e=>setForm(p=>({...p,regimen_fiscal:e.target.value}))} placeholder="correo@empresa.com" />
+                  <Input label="Correo 2" value={form.correo2} onChange={e=>setForm(p=>({...p,correo2:e.target.value}))} placeholder="correo2@empresa.com (opcional)" />
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Representante Legal" value={form.representante_legal} onChange={e=>setForm(p=>({...p,representante_legal:e.target.value}))} placeholder="Nombre del representante legal" />
+                  <Input label="RFC Representante Legal" value={form.rfc_representante} onChange={e=>setForm(p=>({...p,rfc_representante:e.target.value}))} placeholder="XAXX010101000" />
+                </div>
+                <Input label="Teléfono" value={form.telefono} onChange={e=>setForm(p=>({...p,telefono:e.target.value}))} placeholder="81 1234 5678" />
+              </>
+            )}
           </Card>
 
+          {/* SAT */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.greenBg, padding:"5px 9px", borderRadius:8 }}>🏥</span> Accesos IMSS
+              <span style={{ background:C.yellowBg, padding:"5px 9px", borderRadius:8 }}>🔐</span> SAT
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Usuario IMSS" value={form.imss_usuario} onChange={e=>setForm(p=>({...p,imss_usuario:e.target.value}))} placeholder="Número patronal o usuario" />
-              <div style={{ marginBottom:14 }}>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña IMSS</div>
-                <div style={{ position:"relative" }}>
-                  <input type={showPass.imss?"text":"password"} value={form.imss_password} onChange={e=>setForm(p=>({...p,imss_password:e.target.value}))}
-                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                  <button onClick={()=>setShowPass(p=>({...p,imss:!p.imss}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.imss?"🙈":"👁️"}</button>
-                </div>
-              </div>
+              <Input label="Contraseña FIEL" value={form.sat_fiel_pass} onChange={e=>setForm(p=>({...p,sat_fiel_pass:e.target.value}))} placeholder="Contraseña de la e.firma" />
+              <Input label="Fecha de expiración FIEL" type="date" value={form.sat_fiel_exp} onChange={e=>setForm(p=>({...p,sat_fiel_exp:e.target.value}))} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Contraseña CSD" value={form.sat_csd_pass} onChange={e=>setForm(p=>({...p,sat_csd_pass:e.target.value}))} placeholder="Contraseña Sellos Digitales" />
+              <Input label="Fecha de expiración CSD" type="date" value={form.sat_csd_exp} onChange={e=>setForm(p=>({...p,sat_csd_exp:e.target.value}))} />
             </div>
           </Card>
 
+          {/* IMSS */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🏠</span> Accesos INFONAVIT
+              <span style={{ background:C.greenBg, padding:"5px 9px", borderRadius:8 }}>🏥</span> IMSS
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Usuario INFONAVIT" value={form.infonavit_usuario} onChange={e=>setForm(p=>({...p,infonavit_usuario:e.target.value}))} placeholder="Usuario" />
-              <div style={{ marginBottom:14 }}>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña INFONAVIT</div>
-                <div style={{ position:"relative" }}>
-                  <input type={showPass.infonavit?"text":"password"} value={form.infonavit_password} onChange={e=>setForm(p=>({...p,infonavit_password:e.target.value}))}
-                    style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 40px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                  <button onClick={()=>setShowPass(p=>({...p,infonavit:!p.infonavit}))} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{showPass.infonavit?"🙈":"👁️"}</button>
-                </div>
-              </div>
+              <Input label="Usuario IDSE" value={form.imss_idse_user} onChange={e=>setForm(p=>({...p,imss_idse_user:e.target.value}))} placeholder="Usuario IDSE" />
+              <Input label="Contraseña IDSE" value={form.imss_idse_pass} onChange={e=>setForm(p=>({...p,imss_idse_pass:e.target.value}))} placeholder="Contraseña IDSE" />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Usuario SIPARE" value={form.imss_sipare_user} onChange={e=>setForm(p=>({...p,imss_sipare_user:e.target.value}))} placeholder="Usuario SIPARE" />
+              <Input label="Contraseña SIPARE" value={form.imss_sipare_pass} onChange={e=>setForm(p=>({...p,imss_sipare_pass:e.target.value}))} placeholder="Contraseña SIPARE" />
+            </div>
+            <Input label="Fecha de expiración Certificado IDSE" type="date" value={form.imss_cert_exp} onChange={e=>setForm(p=>({...p,imss_cert_exp:e.target.value}))} />
+          </Card>
+
+          {/* INFONAVIT */}
+          <Card style={{ marginBottom:16 }}>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🏠</span> INFONAVIT
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Usuario Portal INFONAVIT" value={form.infonavit_portal_user} onChange={e=>setForm(p=>({...p,infonavit_portal_user:e.target.value}))} placeholder="Usuario" />
+              <Input label="Contraseña Portal INFONAVIT" value={form.infonavit_portal_pass} onChange={e=>setForm(p=>({...p,infonavit_portal_pass:e.target.value}))} placeholder="Contraseña" />
             </div>
           </Card>
 
+          {/* ESTADO — solo persona moral */}
+          {form.tipo_persona==="moral" && (
+            <Card style={{ marginBottom:16 }}>
+              <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:C.redBg, padding:"5px 9px", borderRadius:8 }}>🏛️</span> ESTADO
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <Input label="Usuario" value={form.estado_user} onChange={e=>setForm(p=>({...p,estado_user:e.target.value}))} placeholder="Usuario portal estatal" />
+                <Input label="Contraseña" value={form.estado_pass} onChange={e=>setForm(p=>({...p,estado_pass:e.target.value}))} placeholder="Contraseña" />
+              </div>
+            </Card>
+          )}
+
+          {/* Alertas de vencimiento próximo (2 meses) */}
+          {(() => {
+            const hoy = new Date();
+            const alertas = VENCIMIENTOS_CONFIG
+              .map(cfg => ({ ...cfg, fecha: form[cfg.campo] }))
+              .filter(a => a.fecha)
+              .map(a => ({ ...a, dias: Math.ceil((new Date(a.fecha) - hoy) / (1000*60*60*24)) }))
+              .filter(a => a.dias <= 60);
+            if (alertas.length === 0) return null;
+            return (
+              <Card style={{ marginBottom:16, background:C.redBg, border:`1.5px solid ${C.red}44` }}>
+                <div style={{ color:C.red, fontWeight:700, fontSize:14, marginBottom:10 }}>⚠️ Vencimientos próximos (2 meses o menos)</div>
+                {alertas.map(a=>(
+                  <div key={a.campo} style={{ color:C.red, fontSize:13, marginBottom:4 }}>
+                    • <strong>{a.label}</strong> vence el {a.fecha} ({a.dias < 0 ? `vencido hace ${Math.abs(a.dias)} días` : `${a.dias} días restantes`})
+                  </div>
+                ))}
+                <div style={{ color:C.red, fontSize:11, marginTop:8, opacity:0.8 }}>Al guardar, se creará automáticamente una tarea de renovación en el módulo de Tareas.</div>
+              </Card>
+            );
+          })()}
+
+          {/* Otros accesos */}
           <Card style={{ marginBottom:20 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ color:C.navy, fontWeight:700, fontSize:15, display:"flex", alignItems:"center", gap:8 }}>
@@ -1167,14 +1284,7 @@ function ExpedienteCliente({ client, onBack }) {
               <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, marginBottom:10, alignItems:"end" }}>
                 <Input label={i===0?"Sistema":""} value={o.sistema} onChange={e=>updateOtro(i,"sistema",e.target.value)} placeholder="Ej: IMPI, ISSSTE…" style={{ marginBottom:0 }} />
                 <Input label={i===0?"Usuario":""} value={o.usuario} onChange={e=>updateOtro(i,"usuario",e.target.value)} placeholder="Usuario" style={{ marginBottom:0 }} />
-                <div>
-                  {i===0 && <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Contraseña</div>}
-                  <div style={{ position:"relative" }}>
-                    <input type={showPass[`otro${i}`]?"text":"password"} value={o.password} onChange={e=>updateOtro(i,"password",e.target.value)}
-                      style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 36px 10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-                    <button onClick={()=>setShowPass(p=>({...p,[`otro${i}`]:!p[`otro${i}`]}))} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:13 }}>{showPass[`otro${i}`]?"🙈":"👁️"}</button>
-                  </div>
-                </div>
+                <Input label={i===0?"Contraseña":""} value={o.password} onChange={e=>updateOtro(i,"password",e.target.value)} placeholder="Contraseña" style={{ marginBottom:0 }} />
                 <button onClick={()=>delOtro(i)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"10px 12px", fontFamily:"inherit" }}>✕</button>
               </div>
             ))}
@@ -1283,7 +1393,7 @@ function ExpedienteCliente({ client, onBack }) {
 }
 
 // ── CLIENTES ───────────────────────────────────────────────────────────────
-function ClientesModule({ onNavigate }) {
+function ClientesModule({ onNavigate, user }) {
   const [taxes, setTaxes] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [clients, setClients] = useState([]);
@@ -1324,7 +1434,7 @@ function ClientesModule({ onNavigate }) {
     load();
   };
 
-  if (selectedClient) return <ExpedienteCliente client={selectedClient} onBack={()=>setSelectedClient(null)} />;
+  if (selectedClient) return <ExpedienteCliente client={selectedClient} onBack={()=>setSelectedClient(null)} user={user} />;
 
   return (
     <div style={{ padding:28 }}>
@@ -4077,7 +4187,7 @@ export default function App() {
     impuestos: <ImpuestosModule user={user} initialClient={clientFilter} initialStatus={statusFilter} />,
     tareas: <TareasModule user={user} initialClient={clientFilter} />,
     chat: <ChatModule user={user} />,
-    clientes: <ClientesModule onNavigate={handleNavigate} />,
+    clientes: <ClientesModule onNavigate={handleNavigate} user={user} />,
     nomina: <CalculosModule />,
     cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
