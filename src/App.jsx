@@ -3903,9 +3903,12 @@ async function crearTareaAutomatica({ title, description, assigned_email, due_da
 async function ejecutarAutomatizacionMensual() {
   const hoy = new Date();
   const dia = hoy.getDate();
-  const mes = hoy.getMonth() + 1;
-  const anio = hoy.getFullYear();
   const diaSemana = hoy.getDay(); // 0=domingo, 3=miércoles
+  // Los procesos 1-4 trabajan sobre el mes contable (mes anterior al calendario)
+  const { mes, anio } = mesContableActual();
+  // El proceso 5 (nómina semanal) usa el mes/año calendario reales, no el contable
+  const mesCal = hoy.getMonth() + 1;
+  const anioCal = hoy.getFullYear();
 
   const [{ data: clientesReales }, { data: perfiles }] = await Promise.all([
     supabase.from("clientes").select("id,name"),
@@ -3922,7 +3925,7 @@ async function ejecutarAutomatizacionMensual() {
       if (await existeTareaProceso(proceso, mes, anio, nombreFinal)) continue;
       await crearTareaAutomatica({
         title: `Constancia situación fiscal + Opinión cumplimiento + INFONAVIT + Estado NL — ${nombreFinal}`,
-        description: `Solicitar y enviar al cliente: Constancia de Situación Fiscal, Opinión de Cumplimiento SAT, constancia INFONAVIT y constancia del Estado de Nuevo León. Proceso mensual recurrente (día 1-6).`,
+        description: `Solicitar y enviar al cliente: Constancia de Situación Fiscal, Opinión de Cumplimiento SAT, constancia INFONAVIT y constancia del Estado de Nuevo León. Proceso mensual recurrente (día 1-6), correspondiente al mes contable de ${nombreFinal}.`,
         assigned_email: EMAIL_JESSIEL,
         due_date: new Date(anio, mes-1, 6).toISOString().slice(0,10),
         client: nombreFinal, proceso, perfiles,
@@ -3984,8 +3987,8 @@ async function ejecutarAutomatizacionMensual() {
   // ── Proceso 5: Ricardo — Nómina Ramiro Gandara, todos los miércoles ──
   if (diaSemana === 3) {
     const proceso = "nomina_ramiro_semanal";
-    const semanaKey = `${anio}-W${Math.ceil((dia + new Date(anio,mes-1,1).getDay())/7)}`;
-    if (!(await existeTareaProceso(proceso, mes, anio, semanaKey))) {
+    const semanaKey = `${anioCal}-W${Math.ceil((dia + new Date(anioCal,mesCal-1,1).getDay())/7)}`;
+    if (!(await existeTareaProceso(proceso, mesCal, anioCal, semanaKey))) {
       await crearTareaAutomatica({
         title: `Envío de nómina — Ramiro Gandara Reyes`,
         description: `Calcular y enviar la nómina semanal a Ramiro Gandara Reyes. Tarea recurrente todos los miércoles.`,
@@ -3993,7 +3996,7 @@ async function ejecutarAutomatizacionMensual() {
         due_date: hoy.toISOString().slice(0,10),
         client: "Ramiro Gandara Reyes", proceso, perfiles,
       });
-      await registrarProceso(proceso, mes, anio, semanaKey);
+      await registrarProceso(proceso, mesCal, anioCal, semanaKey);
     }
   }
 }
