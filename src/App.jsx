@@ -599,7 +599,30 @@ function TareasModule({ user, initialClient = "" }) {
     load();
   };
 
-  const move = async (id, status) => { await supabase.from("tareas").update({status}).eq("id",id); load(); };
+  const move = async (id, status) => {
+    await supabase.from("tareas").update({status}).eq("id",id);
+    // Si se completa "papeles de trabajo" de un cliente, disparar DIOT para Jessiel
+    if (status === "done") {
+      const tarea = tasks.find(t=>t.id===id);
+      if (tarea?.proceso === "papeles_trabajo_mensual" && tarea.client) {
+        const yaExiste = tasks.some(t => t.proceso === "diot_automatica" && t.client === tarea.client &&
+          new Date(t.created_at).getMonth() === new Date().getMonth() && new Date(t.created_at).getFullYear() === new Date().getFullYear());
+        if (!yaExiste) {
+          const { data: perfilJessiel } = await supabase.from("perfiles").select("id").eq("email", EMAIL_JESSIEL).maybeSingle();
+          const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+          const hoy = new Date();
+          await supabase.from("tareas").insert([{
+            title: `Declaración Informativa DIOT — ${tarea.client}`,
+            description: `Presentar la Declaración Informativa de Operaciones con Terceros (DIOT) del cliente ${tarea.client}, correspondiente a ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}. Generada automáticamente al completar los papeles de trabajo.`,
+            assigned_to: perfilJessiel?.id || null,
+            client: tarea.client, priority:"alta", status:"todo",
+            proceso: "diot_automatica",
+          }]);
+        }
+      }
+    }
+    load();
+  };
   const del = async (id) => { await supabase.from("tareas").delete().eq("id",id); load(); };
 
   if (setupNeeded) return <SetupBanner />;
@@ -3658,16 +3681,16 @@ function CedulaImpuestosModule({ user }) {
     if (error) { showNotif("❌ Error al guardar"); return; }
 
     if (estatus === "finalizada") {
-      // Disparar tarea automática: Jessiel → DIOT
-      const perfilJessiel = perfiles.find(p=>p.email===EMAIL_JESSIEL);
+      // Cédula finalizada por Ricardo → dispara tarea de presentación de declaración para Edgar
+      const perfilEdgar = perfiles.find(p=>p.email===EMAIL_EDGAR);
       await supabase.from("tareas").insert([{
-        title: `Declaración Informativa DIOT — ${cliente?.name}`,
-        description: `Presentar la Declaración Informativa de Operaciones con Terceros (DIOT) del cliente ${cliente?.name}, correspondiente a ${MESES[mes-1]} ${anio}. Generada automáticamente al finalizar la cédula de impuestos.`,
-        assigned_to: perfilJessiel?.id || null,
+        title: `Presentación de declaración — ${cliente?.name}`,
+        description: `Presentar ante el SAT la declaración de ${cliente?.name} correspondiente a ${MESES[mes-1]} ${anio}. ISR causado: $${fmt(parseFloat(isrCausado)||0)} · IVA a pagar: $${fmt(ivaAPagar)}. Generada automáticamente al finalizar la cédula de impuestos.`,
+        assigned_to: perfilEdgar?.id || null,
         client: cliente?.name, priority:"alta", status:"todo",
-        proceso: "diot_automatica",
+        proceso: "presentacion_declaracion_automatica",
       }]);
-      showNotif(`✅ Cédula finalizada — Tarea de DIOT creada para Jessiel`);
+      showNotif(`✅ Cédula finalizada — Tarea de presentación creada para Edgar`);
     } else {
       showNotif("✅ Cédula guardada como borrador");
     }
@@ -3676,18 +3699,18 @@ function CedulaImpuestosModule({ user }) {
     load();
   };
 
-  const finalizarYDispararEdgar = async (cedula) => {
-    // Marca cédula como finalizada (si no lo estaba) y dispara tarea para Edgar de presentación de impuestos
+  const finalizarBorrador = async (cedula) => {
+    // Permite finalizar una cédula que se guardó como borrador, disparando la tarea de Edgar
     await supabase.from("cedulas_impuestos").update({ estatus:"finalizada" }).eq("id", cedula.id);
     const perfilEdgar = perfiles.find(p=>p.email===EMAIL_EDGAR);
     await supabase.from("tareas").insert([{
-      title: `Presentación de impuestos — ${cedula.cliente_nombre}`,
-      description: `Presentar ante el SAT los impuestos de ${cedula.cliente_nombre} correspondientes a ${MESES[cedula.mes-1]} ${cedula.anio}. ISR a cargo: $${fmt(cedula.isr_causado)} · IVA a pagar: $${fmt(cedula.iva_a_pagar)}. Generada automáticamente al subir la cédula de impuestos.`,
+      title: `Presentación de declaración — ${cedula.cliente_nombre}`,
+      description: `Presentar ante el SAT la declaración de ${cedula.cliente_nombre} correspondiente a ${MESES[cedula.mes-1]} ${cedula.anio}. ISR causado: $${fmt(cedula.isr_causado)} · IVA a pagar: $${fmt(cedula.iva_a_pagar)}. Generada automáticamente al finalizar la cédula de impuestos.`,
       assigned_to: perfilEdgar?.id || null,
       client: cedula.cliente_nombre, priority:"alta", status:"todo",
-      proceso: "presentacion_impuestos_automatica",
+      proceso: "presentacion_declaracion_automatica",
     }]);
-    showNotif(`✅ Tarea de presentación de impuestos creada para Edgar`);
+    showNotif(`✅ Tarea de presentación de declaración creada para Edgar`);
     load();
   };
 
@@ -3745,7 +3768,7 @@ function CedulaImpuestosModule({ user }) {
                   </td>
                   <td style={{padding:"12px 14px"}}>
                     {c.estatus==="borrador" && (
-                      <button onClick={()=>finalizarYDispararEdgar(c)} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✓ Finalizar → Edgar</button>
+                      <button onClick={()=>finalizarBorrador(c)} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✓ Finalizar → Edgar</button>
                     )}
                   </td>
                 </tr>
@@ -3803,7 +3826,7 @@ function CedulaImpuestosModule({ user }) {
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteId}>Guardar borrador</Btn>
-        <Btn onClick={()=>guardar("finalizada")} loading={saving} disabled={!clienteId}>✓ Finalizar cédula (dispara DIOT a Jessiel)</Btn>
+        <Btn onClick={()=>guardar("finalizada")} loading={saving} disabled={!clienteId}>✓ Finalizar cédula (dispara presentación a Edgar)</Btn>
       </div>
     </div>
   );
