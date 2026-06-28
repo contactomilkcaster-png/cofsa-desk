@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://gkihfrtayaknarigdzwk.supabase.co";
@@ -3655,40 +3655,278 @@ function CotizacionesModule({ user }) {
   );
 }
 
-// ── CÉDULA DE IMPUESTOS ───────────────────────────────────────────────────
+// ── CÉDULA DE IMPUESTOS (formato completo RARG) ──────────────────────────
+
+const CEDULA_MESES = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+const CEDULA_MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+// Definición de todos los campos de la cédula, agrupados por sección, en el orden del Excel
+const CEDULA_SECCIONES = [
+  {
+    titulo: "Ingresos",
+    campos: [
+      { key:"ing_tasa16", label:"Tasa 16%" },
+      { key:"ing_tasa0", label:"Tasa 0%" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "IVA por pagar",
+    campos: [
+      { key:"iva_por_pagar", label:"IVA por pagar" },
+    ],
+    sinTotal: true,
+  },
+  {
+    titulo: "Egresos al 16%",
+    campos: [
+      { key:"egr16_compras", label:"Compras" },
+      { key:"egr16_gastos_admin", label:"Gastos Administración" },
+      { key:"egr16_gastos_financieros", label:"Gastos Financieros" },
+      { key:"egr16_gastos_operacion", label:"Gastos Operación" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "IVA acreditado (Egresos 16%)",
+    campos: [
+      { key:"iva_acred_compras", label:"IVA Compras" },
+      { key:"iva_acred_gastos_admin", label:"IVA Gastos Admin." },
+      { key:"iva_acred_gastos_financieros", label:"IVA Gastos Financieros" },
+      { key:"iva_acred_gastos_operacion", label:"IVA Gastos Operación" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "Egresos Gravados al 0%",
+    campos: [
+      { key:"egr0_sueldos_salarios", label:"Sueldos y Salarios" },
+      { key:"egr0_prima_vacacional", label:"Prima Vacacional" },
+      { key:"egr0_aguinaldos", label:"Aguinaldos" },
+      { key:"egr0_impuesto_sobre_nomina", label:"Impuesto Sobre Nómina" },
+      { key:"egr0_imss", label:"IMSS" },
+      { key:"egr0_rcv", label:"RCV" },
+      { key:"egr0_infonavit", label:"Infonavit" },
+      { key:"egr0_impuestos_federales", label:"Impuestos Federales" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "Compra de Activos Fijos",
+    campos: [
+      { key:"act_equipo_transporte", label:"Equipo de Transporte" },
+      { key:"act_equipo_computo", label:"Equipo de Cómputo" },
+      { key:"act_edificios", label:"Edificios" },
+      { key:"act_maquinaria_equipo", label:"Maquinaria y Equipo" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "IVA acreditado (Activos Fijos)",
+    campos: [
+      { key:"act_iva_equipo_transporte", label:"IVA Equipo Transporte" },
+      { key:"act_iva_equipo_computo", label:"IVA Equipo Cómputo" },
+      { key:"act_iva_edificios", label:"IVA Edificios" },
+      { key:"act_iva_maquinaria_equipo", label:"IVA Maquinaria y Equipo" },
+    ],
+    totalLabel: "Totales",
+  },
+  {
+    titulo: "Impuestos Retenidos",
+    campos: [
+      { key:"ret_isr", label:"ISR Retenido" },
+      { key:"ret_iva", label:"IVA Retenido" },
+      { key:"ret_imss", label:"IMSS Retenido" },
+      { key:"ret_infonavit", label:"Infonavit Retenido" },
+    ],
+    totalLabel: "Totales",
+  },
+];
+
+const CEDULA_CAMPOS_FLAT = CEDULA_SECCIONES.flatMap(s => s.campos.map(c => c.key));
+
+function cedulaVacia() {
+  const obj = {};
+  CEDULA_CAMPOS_FLAT.forEach(k => obj[k] = "");
+  return obj;
+}
+
+function sumaSeccion(cedula, campos) {
+  return campos.reduce((s, c) => s + (parseFloat(cedula[c.key]) || 0), 0);
+}
+
+async function generarPDFCedula({ cliente, mes, anio, datos, esAnual, todasCedulas }) {
+  if (!window.jspdf) {
+    await new Promise((resolve,reject)=>{
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+    });
+  }
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation: esAnual ? "landscape" : "portrait", unit:"mm", format:"letter"});
+  const W = esAnual ? 279 : 216, M=14, TW=W-M*2;
+  const fmt=n=>(parseFloat(n)||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  let y=16;
+
+  try { doc.addImage(LOGO_B64,"JPEG",M,y,16,16); } catch(e){}
+  doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(27,42,74);
+  doc.text(cliente.toUpperCase(), M+20, y+6);
+  doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+  doc.text(esAnual ? `CONCENTRADO ANUAL DE IMPUESTOS — ${anio}` : `CONCENTRADO MENSUAL DE IMPUESTOS — ${CEDULA_MESES_LARGO[mes-1]} ${anio}`, M+20, y+12);
+  y += 22;
+  doc.setDrawColor(27,42,74); doc.setLineWidth(0.6); doc.line(M,y,W-M,y); y+=6;
+
+  if (!esAnual) {
+    // ── Vista mensual: 2 columnas como el Excel ──
+    const colW = TW/2 - 3;
+    let yLeft = y, yRight = y;
+    const xLeft = M, xRight = M + colW + 6;
+
+    const pintarSeccion = (x, yStart, seccion) => {
+      let yy = yStart;
+      doc.setFillColor(27,42,74); doc.rect(x,yy,colW,6,"F");
+      doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.text(seccion.titulo.toUpperCase(), x+3, yy+4.2);
+      yy+=6;
+      seccion.campos.forEach((c,i)=>{
+        doc.setFillColor(i%2===0?248:255,i%2===0?249:255,i%2===0?252:255);
+        doc.rect(x,yy,colW,5.5,"F");
+        doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(30,41,59);
+        doc.text(c.label, x+3, yy+3.8);
+        doc.text(`$${fmt(datos[c.key])}`, x+colW-3, yy+3.8, {align:"right"});
+        doc.setDrawColor(220,226,235); doc.setLineWidth(0.1); doc.rect(x,yy,colW,5.5,"S");
+        yy+=5.5;
+      });
+      if (!seccion.sinTotal) {
+        const total = sumaSeccion(datos, seccion.campos);
+        doc.setFillColor(220,228,250); doc.rect(x,yy,colW,6,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(27,42,74);
+        doc.text(seccion.totalLabel, x+3, yy+4.2);
+        doc.text(`$${fmt(total)}`, x+colW-3, yy+4.2, {align:"right"});
+        yy+=6;
+      }
+      return yy + 4;
+    };
+
+    // Distribución: izquierda = Ingresos, IVA por pagar, Egresos16, IVA acred16, EgresosActivos+IVA
+    // derecha = Egresos0%, Retenidos
+    const izquierda = [CEDULA_SECCIONES[0], CEDULA_SECCIONES[1], CEDULA_SECCIONES[2], CEDULA_SECCIONES[3], CEDULA_SECCIONES[5], CEDULA_SECCIONES[6]];
+    const derecha = [CEDULA_SECCIONES[4], CEDULA_SECCIONES[7]];
+
+    izquierda.forEach(s=>{ if (yLeft>250){doc.addPage();yLeft=16;} yLeft = pintarSeccion(xLeft, yLeft, s); });
+    derecha.forEach(s=>{ if (yRight>250){doc.addPage();yRight=16;} yRight = pintarSeccion(xRight, yRight, s); });
+
+    y = Math.max(yLeft, yRight) + 4;
+  } else {
+    // ── Vista anual: tabla con 12 meses en columnas, como el Excel ──
+    const colLabelW = 52;
+    const colMesW = (TW - colLabelW) / 12;
+    doc.setFillColor(27,42,74); doc.rect(M,y,TW,6,"F");
+    doc.setTextColor(255,255,255); doc.setFontSize(7); doc.setFont("helvetica","bold");
+    doc.text("CONCEPTO", M+2, y+4.2);
+    CEDULA_MESES.forEach((m,i)=>{
+      doc.text(m, M+colLabelW+colMesW*i+colMesW/2, y+4.2, {align:"center"});
+    });
+    y+=6;
+
+    let rowIdx = 0;
+    CEDULA_SECCIONES.forEach(seccion=>{
+      doc.setFillColor(255,251,235); doc.rect(M,y,TW,5,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(180,100,0);
+      doc.text(seccion.titulo, M+2, y+3.5);
+      y+=5;
+      seccion.campos.forEach((c,i)=>{
+        if (y>185){doc.addPage("landscape");y=16;}
+        doc.setFillColor(rowIdx%2===0?248:255,rowIdx%2===0?249:255,rowIdx%2===0?252:255);
+        doc.rect(M,y,TW,5,"F");
+        doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(30,41,59);
+        doc.text(c.label, M+2, y+3.5);
+        CEDULA_MESES.forEach((mLabel,mi)=>{
+          const cedulaMes = todasCedulas.find(cc=>cc.mes===mi+1);
+          const val = cedulaMes ? (parseFloat(cedulaMes[c.key])||0) : 0;
+          doc.text(val ? fmt(val) : "—", M+colLabelW+colMesW*mi+colMesW-1, y+3.5, {align:"right"});
+        });
+        doc.setDrawColor(225,230,238); doc.setLineWidth(0.08); doc.rect(M,y,TW,5,"S");
+        y+=5; rowIdx++;
+      });
+      if (!seccion.sinTotal) {
+        doc.setFillColor(220,228,250); doc.rect(M,y,TW,5,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(27,42,74);
+        doc.text(seccion.totalLabel, M+2, y+3.5);
+        CEDULA_MESES.forEach((mLabel,mi)=>{
+          const cedulaMes = todasCedulas.find(cc=>cc.mes===mi+1);
+          const val = cedulaMes ? sumaSeccion(cedulaMes, seccion.campos) : 0;
+          doc.text(val ? fmt(val) : "—", M+colLabelW+colMesW*mi+colMesW-1, y+3.5, {align:"right"});
+        });
+        y+=5;
+      }
+      y+=2;
+    });
+  }
+
+  y+=4;
+  doc.setDrawColor(27,42,74); doc.setLineWidth(0.4); doc.line(M,y,W-M,y); y+=4;
+  doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(100,116,139);
+  doc.text("CIA COFSA SERVICE — Cédula generada el " + new Date().toLocaleDateString("es-MX"), M, y);
+
+  const nombreArchivo = esAnual
+    ? `Cedula_Anual_${cliente.replace(/\s+/g,"_")}_${anio}.pdf`
+    : `Cedula_${cliente.replace(/\s+/g,"_")}_${CEDULA_MESES[mes-1]}_${anio}.pdf`;
+  doc.save(nombreArchivo);
+}
+
+function CamposSeccionCedula({ seccion, form, setForm }) {
+  const fmt = n => (parseFloat(n)||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const total = sumaSeccion(form, seccion.campos);
+  return (
+    <Card style={{ marginBottom:14 }}>
+      <div style={{ color:C.navy, fontWeight:700, fontSize:13, marginBottom:10 }}>{seccion.titulo}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        {seccion.campos.map(c=>(
+          <Input key={c.key} label={c.label} type="number" value={form[c.key]} onChange={e=>setForm(p=>({...p,[c.key]:e.target.value}))} placeholder="0.00" style={{ marginBottom:0 }} />
+        ))}
+      </div>
+      {!seccion.sinTotal && (
+        <div style={{ marginTop:10, background:C.navyDim, borderRadius:8, padding:"8px 12px", textAlign:"right" }}>
+          <span style={{ color:C.navy, fontWeight:700, fontSize:13 }}>{seccion.totalLabel}: ${fmt(total)}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function CedulaImpuestosModule({ user }) {
-  const [vista, setVista] = useState("historial");
+  const [vista, setVista] = useState("historial"); // historial | nueva | anual
   const [cedulas, setCedulas] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [perfiles, setPerfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notif, setNotif] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [gen, setGen] = useState(false);
 
+  const [editId, setEditId] = useState(null); // si está editando una cédula existente
   const [clienteId, setClienteId] = useState("");
   const { mes: mesContableC, anio: anioContableC } = mesContableActual();
   const [mes, setMes] = useState(mesContableC);
   const [anio, setAnio] = useState(anioContableC);
-  const [isrCausado, setIsrCausado] = useState("");
-  const [isrRetenido, setIsrRetenido] = useState("");
-  const [ivaCausado, setIvaCausado] = useState("");
-  const [ivaAcreditable, setIvaAcreditable] = useState("");
+  const [form, setForm] = useState(cedulaVacia());
   const [notas, setNotas] = useState("");
 
-  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  const fmt = n => parseFloat(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+  // Vista anual
+  const [clienteAnualId, setClienteAnualId] = useState("");
+  const [anioAnual, setAnioAnual] = useState(new Date().getFullYear());
+
+  const fmt = n => (parseFloat(n)||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
 
   const load = async () => {
     setLoading(true);
-    const [c, cl, p] = await Promise.all([
-      supabase.from("cedulas_impuestos").select("*").order("created_at",{ascending:false}),
+    const [c, cl] = await Promise.all([
+      supabase.from("cedulas_impuestos").select("*").order("anio",{ascending:false}).order("mes",{ascending:false}),
       supabase.from("clientes").select("*").order("name"),
-      supabase.from("perfiles").select("*"),
     ]);
     setCedulas(c.data||[]);
     setClientes(cl.data||[]);
-    setPerfiles(p.data||[]);
     setLoading(false);
   };
   useEffect(()=>{ load(); },[]);
@@ -3696,11 +3934,20 @@ function CedulaImpuestosModule({ user }) {
   const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3500); };
 
   const resetForm = () => {
-    setClienteId(""); setMes(new Date().getMonth()+1); setAnio(new Date().getFullYear());
-    setIsrCausado(""); setIsrRetenido(""); setIvaCausado(""); setIvaAcreditable(""); setNotas("");
+    setEditId(null); setClienteId(""); setMes(mesContableC); setAnio(anioContableC);
+    setForm(cedulaVacia()); setNotas("");
   };
 
-  const ivaAPagar = (parseFloat(ivaCausado)||0) - (parseFloat(ivaAcreditable)||0);
+  const cargarParaEditar = (cedula) => {
+    setEditId(cedula.id);
+    setClienteId(cedula.cliente_id || "");
+    setMes(cedula.mes); setAnio(cedula.anio);
+    const f = {};
+    CEDULA_CAMPOS_FLAT.forEach(k => f[k] = cedula[k] ?? "");
+    setForm(f);
+    setNotas(cedula.notas || "");
+    setVista("nueva");
+  };
 
   const guardar = async (estatus) => {
     if (!clienteId) return;
@@ -3708,50 +3955,65 @@ function CedulaImpuestosModule({ user }) {
     const cliente = clientes.find(c=>c.id===clienteId);
     const payload = {
       cliente_id: clienteId, cliente_nombre: cliente?.name || "",
-      mes, anio,
-      isr_causado: parseFloat(isrCausado)||0, isr_retenido: parseFloat(isrRetenido)||0,
-      iva_causado: parseFloat(ivaCausado)||0, iva_acreditable: parseFloat(ivaAcreditable)||0,
-      iva_a_pagar: ivaAPagar,
-      notas, estatus, created_by: user?.id || null,
+      mes, anio, notas, estatus, created_by: user?.id || null,
+      updated_at: new Date().toISOString(),
     };
-    const { error } = await supabase.from("cedulas_impuestos").insert([payload]);
-    setSaving(false);
-    if (error) { showNotif("❌ Error al guardar"); return; }
+    CEDULA_CAMPOS_FLAT.forEach(k => { payload[k] = parseFloat(form[k]) || 0; });
 
-    if (estatus === "finalizada") {
-      // Cédula finalizada por Ricardo → dispara tarea de presentación de declaración para Edgar
-      const perfilEdgar = perfiles.find(p=>p.email===EMAIL_EDGAR);
+    let error;
+    if (editId) {
+      const r = await supabase.from("cedulas_impuestos").update(payload).eq("id", editId);
+      error = r.error;
+    } else {
+      const r = await supabase.from("cedulas_impuestos").upsert([payload], { onConflict: "cliente_id,mes,anio" });
+      error = r.error;
+    }
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar: " + error.message); return; }
+
+    if (estatus === "finalizada" && !editId) {
+      const perfilEdgar = (await supabase.from("perfiles").select("id").eq("email", EMAIL_EDGAR).maybeSingle()).data;
       await supabase.from("tareas").insert([{
         title: `Presentación de declaración — ${cliente?.name}`,
-        description: `Presentar ante el SAT la declaración de ${cliente?.name} correspondiente a ${MESES[mes-1]} ${anio}. ISR causado: $${fmt(parseFloat(isrCausado)||0)} · IVA a pagar: $${fmt(ivaAPagar)}. Generada automáticamente al finalizar la cédula de impuestos.`,
+        description: `Presentar ante el SAT la declaración de ${cliente?.name} correspondiente a ${CEDULA_MESES_LARGO[mes-1]} ${anio}. Generada automáticamente al finalizar la cédula de impuestos.`,
         assigned_to: perfilEdgar?.id || null,
         client: cliente?.name, priority:"alta", status:"todo",
         proceso: "presentacion_declaracion_automatica",
       }]);
       showNotif(`✅ Cédula finalizada — Tarea de presentación creada para Edgar`);
     } else {
-      showNotif("✅ Cédula guardada como borrador");
+      showNotif(editId ? "✅ Cédula actualizada" : "✅ Cédula guardada como borrador");
     }
     resetForm();
     setVista("historial");
     load();
   };
 
-  const finalizarBorrador = async (cedula) => {
-    // Permite finalizar una cédula que se guardó como borrador, disparando la tarea de Edgar
-    await supabase.from("cedulas_impuestos").update({ estatus:"finalizada" }).eq("id", cedula.id);
-    const perfilEdgar = perfiles.find(p=>p.email===EMAIL_EDGAR);
-    await supabase.from("tareas").insert([{
-      title: `Presentación de declaración — ${cedula.cliente_nombre}`,
-      description: `Presentar ante el SAT la declaración de ${cedula.cliente_nombre} correspondiente a ${MESES[cedula.mes-1]} ${cedula.anio}. ISR causado: $${fmt(cedula.isr_causado)} · IVA a pagar: $${fmt(cedula.iva_a_pagar)}. Generada automáticamente al finalizar la cédula de impuestos.`,
-      assigned_to: perfilEdgar?.id || null,
-      client: cedula.cliente_nombre, priority:"alta", status:"todo",
-      proceso: "presentacion_declaracion_automatica",
-    }]);
-    showNotif(`✅ Tarea de presentación de declaración creada para Edgar`);
+  const eliminar = async (id) => {
+    await supabase.from("cedulas_impuestos").delete().eq("id", id);
+    showNotif("🗑️ Cédula eliminada");
     load();
   };
 
+  const descargarMensual = async (cedula) => {
+    setGen(true);
+    await generarPDFCedula({ cliente: cedula.cliente_nombre, mes: cedula.mes, anio: cedula.anio, datos: cedula, esAnual:false });
+    setGen(false);
+  };
+
+  const descargarAnual = async (clienteNombre, anioSel, lista) => {
+    setGen(true);
+    await generarPDFCedula({ cliente: clienteNombre, anio: anioSel, datos:null, esAnual:true, todasCedulas: lista });
+    setGen(false);
+  };
+
+  // Clientes pendientes del mes contable actual
+  const pendientesDelMes = (() => {
+    const conCedula = new Set(cedulas.filter(c=>c.mes===mesContableC && c.anio===anioContableC).map(c=>c.cliente_nombre));
+    return clientes.filter(c=>!conCedula.has(c.name));
+  })();
+
+  // ── VISTA HISTORIAL (mensual) ──
   if (vista === "historial") return (
     <div style={{padding:28}}>
       <style>{ANIM}</style>
@@ -3761,22 +4023,18 @@ function CedulaImpuestosModule({ user }) {
           <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Cédulas de Impuestos</h1>
           <p style={{margin:0,color:C.muted,fontSize:13}}>{cedulas.length} cédulas registradas</p>
         </div>
-        <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cédula</Btn>
+        <div style={{display:"flex",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setVista("anual")}>📊 Vista Anual</Btn>
+          <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cédula</Btn>
+        </div>
       </div>
 
-      {/* Clientes pendientes del mes actual */}
-      {!loading && (() => {
-        const mesActual = new Date().getMonth()+1, anioActual = new Date().getFullYear();
-        const clientesConCedula = new Set(cedulas.filter(c=>c.mes===mesActual && c.anio===anioActual).map(c=>c.cliente_nombre));
-        const pendientes = clientes.filter(c=>!clientesConCedula.has(c.name));
-        if (pendientes.length === 0) return null;
-        return (
-          <div style={{background:C.yellowBg, border:`1.5px solid ${C.yellow}44`, borderRadius:12, padding:"14px 18px", marginBottom:20}}>
-            <div style={{color:C.yellow, fontWeight:700, fontSize:13, marginBottom:6}}>⚠️ {pendientes.length} clientes sin cédula este mes ({MESES[mesActual-1]} {anioActual})</div>
-            <div style={{color:C.yellow, fontSize:12, opacity:0.85, lineHeight:1.6}}>{pendientes.map(p=>p.name).join(" · ")}</div>
-          </div>
-        );
-      })()}
+      {!loading && pendientesDelMes.length > 0 && (
+        <div style={{background:C.yellowBg, border:`1.5px solid ${C.yellow}44`, borderRadius:12, padding:"14px 18px", marginBottom:20}}>
+          <div style={{color:C.yellow, fontWeight:700, fontSize:13, marginBottom:6}}>⚠️ {pendientesDelMes.length} clientes sin cédula de {CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}</div>
+          <div style={{color:C.yellow, fontSize:12, opacity:0.85, lineHeight:1.6}}>{pendientesDelMes.map(p=>p.name).join(" · ")}</div>
+        </div>
+      )}
 
       {loading ? <Spinner/> : cedulas.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
@@ -3789,7 +4047,7 @@ function CedulaImpuestosModule({ user }) {
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:C.panel}}>
-                {["Cliente","Período","ISR causado","IVA a pagar","Estatus","Acciones"].map(h=>(
+                {["Cliente","Período","Ingresos","IVA por pagar","Estatus","Acciones"].map(h=>(
                   <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
                 ))}
               </tr>
@@ -3798,16 +4056,18 @@ function CedulaImpuestosModule({ user }) {
               {cedulas.map(c=>(
                 <tr key={c.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
                   <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{c.cliente_nombre}</td>
-                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{MESES[c.mes-1]} {c.anio}</td>
-                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt(c.isr_causado)}</td>
-                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt(c.iva_a_pagar)}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{CEDULA_MESES_LARGO[c.mes-1]} {c.anio}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt((c.ing_tasa16||0)+(c.ing_tasa0||0))}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt(c.iva_por_pagar)}</td>
                   <td style={{padding:"12px 14px"}}>
                     <span style={{background:(c.estatus==="finalizada"?C.green:C.muted)+"22",color:c.estatus==="finalizada"?C.green:C.muted,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{c.estatus}</span>
                   </td>
                   <td style={{padding:"12px 14px"}}>
-                    {c.estatus==="borrador" && (
-                      <button onClick={()=>finalizarBorrador(c)} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✓ Finalizar → Edgar</button>
-                    )}
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>cargarParaEditar(c)} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✎ Editar</button>
+                      <button onClick={()=>descargarMensual(c)} disabled={gen} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>eliminar(c.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -3818,56 +4078,127 @@ function CedulaImpuestosModule({ user }) {
     </div>
   );
 
+  // ── VISTA ANUAL ──
+  if (vista === "anual") {
+    const cedulasDelCliente = clienteAnualId ? cedulas.filter(c=>c.cliente_id===clienteAnualId && c.anio===anioAnual) : [];
+    const clienteAnualNombre = clientes.find(c=>c.id===clienteAnualId)?.name || "";
+
+    return (
+      <div style={{padding:28}}>
+        <style>{ANIM}</style>
+        {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20,animation:"fadeUp 0.3s ease"}}>
+          <button onClick={()=>setVista("historial")} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
+          <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Concentrado Anual de Impuestos</h1>
+        </div>
+
+        <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+          <FieldSelect value={clienteAnualId} onChange={e=>setClienteAnualId(e.target.value)} style={{width:280}}>
+            <option value="">— Selecciona un cliente —</option>
+            {clientes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </FieldSelect>
+          <FieldSelect value={anioAnual} onChange={e=>setAnioAnual(parseInt(e.target.value))} style={{width:110}}>
+            {[anioAnual-1,anioAnual,anioAnual+1].map(a=><option key={a} value={a}>{a}</option>)}
+          </FieldSelect>
+          {clienteAnualId && (
+            <Btn variant="ghost" onClick={()=>descargarAnual(clienteAnualNombre, anioAnual, cedulasDelCliente)} loading={gen}>⬇️ Descargar PDF Anual</Btn>
+          )}
+        </div>
+
+        {!clienteAnualId ? (
+          <div style={{textAlign:"center",padding:60,color:C.muted}}>Selecciona un cliente para ver su concentrado anual</div>
+        ) : (
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:1400}}>
+                <thead>
+                  <tr style={{background:C.navy}}>
+                    <th style={{padding:"10px 12px",color:C.white,fontSize:11,fontWeight:700,textAlign:"left",position:"sticky",left:0,background:C.navy,zIndex:2,minWidth:220}}>Concepto</th>
+                    {CEDULA_MESES.map(m=>(
+                      <th key={m} style={{padding:"10px 8px",color:C.white,fontSize:11,fontWeight:700,textAlign:"right",minWidth:95}}>{m}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {CEDULA_SECCIONES.map(seccion=>(
+                    <Fragment key={seccion.titulo}>
+                      <tr style={{background:C.yellowBg}}>
+                        <td colSpan={13} style={{padding:"6px 12px",color:"#B45309",fontSize:11,fontWeight:700,position:"sticky",left:0,background:C.yellowBg}}>{seccion.titulo}</td>
+                      </tr>
+                      {seccion.campos.map((campo,i)=>(
+                        <tr key={campo.key} style={{background:i%2===0?"white":C.panel}}>
+                          <td style={{padding:"8px 12px",color:C.text,fontSize:12,position:"sticky",left:0,background:i%2===0?"white":C.panel}}>{campo.label}</td>
+                          {CEDULA_MESES.map((mLabel,mi)=>{
+                            const cedulaMes = cedulasDelCliente.find(c=>c.mes===mi+1);
+                            const val = cedulaMes ? parseFloat(cedulaMes[campo.key])||0 : null;
+                            return <td key={mi} style={{padding:"8px 8px",color:C.muted,fontSize:11.5,textAlign:"right"}}>{val ? `$${fmt(val)}` : "—"}</td>;
+                          })}
+                        </tr>
+                      ))}
+                      {!seccion.sinTotal && (
+                        <tr style={{background:C.navyDim}}>
+                          <td style={{padding:"8px 12px",color:C.navy,fontWeight:700,fontSize:12,position:"sticky",left:0,background:C.navyDim}}>{seccion.totalLabel}</td>
+                          {CEDULA_MESES.map((mLabel,mi)=>{
+                            const cedulaMes = cedulasDelCliente.find(c=>c.mes===mi+1);
+                            const val = cedulaMes ? sumaSeccion(cedulaMes, seccion.campos) : 0;
+                            return <td key={mi} style={{padding:"8px 8px",color:C.navy,fontWeight:700,fontSize:11.5,textAlign:"right"}}>{val ? `$${fmt(val)}` : "—"}</td>;
+                          })}
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  // ── VISTA NUEVA / EDITAR CÉDULA ──
   return (
-    <div style={{padding:28,maxWidth:700}}>
+    <div style={{padding:28,maxWidth:820}}>
       <style>{ANIM}</style>
-      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20,animation:"fadeUp 0.3s ease"}}>
         <button onClick={()=>{setVista("historial");resetForm();}} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
-        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Nueva Cédula de Impuestos</h1>
+        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>{editId ? "Editar Cédula" : "Nueva Cédula de Impuestos"}</h1>
       </div>
 
       <Card style={{marginBottom:16}}>
-        <FieldSelect label="Cliente *" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
+        <FieldSelect label="Cliente *" value={clienteId} onChange={e=>setClienteId(e.target.value)} disabled={!!editId}>
           <option value="">— Selecciona un cliente —</option>
           {clientes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </FieldSelect>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <FieldSelect label="Mes" value={mes} onChange={e=>setMes(parseInt(e.target.value))}>
-            {MESES.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+          <FieldSelect label="Mes" value={mes} onChange={e=>setMes(parseInt(e.target.value))} disabled={!!editId}>
+            {CEDULA_MESES_LARGO.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
           </FieldSelect>
-          <FieldSelect label="Año" value={anio} onChange={e=>setAnio(parseInt(e.target.value))}>
+          <FieldSelect label="Año" value={anio} onChange={e=>setAnio(parseInt(e.target.value))} disabled={!!editId}>
             {[anio-1,anio,anio+1].map(a=><option key={a} value={a}>{a}</option>)}
           </FieldSelect>
         </div>
-        <div style={{color:C.muted,fontSize:11,marginTop:-10,marginBottom:14}}>
-          📌 Preseleccionado el mes contable de trabajo ({MESES[mesContableC-1]} {anioContableC}). Ajusta si la cédula es de otro período.
-        </div>
+        {!editId && (
+          <div style={{color:C.muted,fontSize:11,marginTop:-10,marginBottom:6}}>
+            📌 Preseleccionado el mes contable de trabajo ({CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}). Ajusta si la cédula es de otro período.
+          </div>
+        )}
+      </Card>
 
-        <div style={{color:C.navy,fontWeight:700,fontSize:14,margin:"16px 0 10px"}}>ISR</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Input label="ISR causado $" type="number" value={isrCausado} onChange={e=>setIsrCausado(e.target.value)} placeholder="0.00"/>
-          <Input label="ISR retenido $" type="number" value={isrRetenido} onChange={e=>setIsrRetenido(e.target.value)} placeholder="0.00"/>
-        </div>
+      {CEDULA_SECCIONES.map(seccion=>(
+        <CamposSeccionCedula key={seccion.titulo} seccion={seccion} form={form} setForm={setForm} />
+      ))}
 
-        <div style={{color:C.navy,fontWeight:700,fontSize:14,margin:"16px 0 10px"}}>IVA</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Input label="IVA causado $" type="number" value={ivaCausado} onChange={e=>setIvaCausado(e.target.value)} placeholder="0.00"/>
-          <Input label="IVA acreditable $" type="number" value={ivaAcreditable} onChange={e=>setIvaAcreditable(e.target.value)} placeholder="0.00"/>
-        </div>
-        <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",marginTop:8,marginBottom:16}}>
-          <span style={{color:C.navy,fontWeight:700,fontSize:14}}>IVA a pagar: ${fmt(ivaAPagar)}</span>
-        </div>
-
-        <div style={{marginBottom:8}}>
-          <div style={{color:C.muted,fontSize:11,marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notas</div>
-          <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={3}
-            style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
-        </div>
+      <Card style={{marginBottom:16}}>
+        <div style={{color:C.muted,fontSize:11,marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notas</div>
+        <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={3}
+          style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
       </Card>
 
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="ghost" onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteId}>Guardar borrador</Btn>
-        <Btn onClick={()=>guardar("finalizada")} loading={saving} disabled={!clienteId}>✓ Finalizar cédula (dispara presentación a Edgar)</Btn>
+        <Btn onClick={()=>guardar("finalizada")} loading={saving} disabled={!clienteId}>{editId ? "✓ Guardar cambios" : "✓ Finalizar cédula (dispara presentación a Edgar)"}</Btn>
       </div>
     </div>
   );
