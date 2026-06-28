@@ -600,11 +600,50 @@ function TareasModule({ user, initialClient = "" }) {
     load();
   };
 
+  // Mapea el "proceso" de una tarea automática a categoría/subcategoría de Orden de Trabajo
+  const PROCESO_A_OT = {
+    constancias_mensuales:      { categoria:"SAT",         subcategoria:null },
+    pagos_imss_mensuales:       { categoria:"IMSS",        subcategoria:null },
+    papeles_trabajo_mensual:    { categoria:"Cálculos",    subcategoria:null },
+    archivar_papeleria_mensual: { categoria:"Cálculos",    subcategoria:null },
+    nomina_ramiro_semanal:      { categoria:"Cálculos",    subcategoria:"Nómina" },
+    diot_automatica:            { categoria:"Declaración", subcategoria:"Informativa" },
+    presentacion_declaracion_automatica: { categoria:"Declaración", subcategoria:"Mensual" },
+  };
+
+  const generarFolioOT = () => `OT-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+  const crearOrdenTrabajoDesdeTask = async (tarea) => {
+    const mapeo = PROCESO_A_OT[tarea.proceso];
+    if (!mapeo) return; // Solo tareas que vienen de un proceso automatizado generan OT
+    let clienteId = null;
+    if (tarea.client) {
+      const { data: clienteData } = await supabase.from("clientes").select("id").eq("name", tarea.client).maybeSingle();
+      clienteId = clienteData?.id || null;
+    }
+    await supabase.from("ordenes_trabajo").insert([{
+      folio: generarFolioOT(),
+      cliente_id: clienteId,
+      cliente_nombre: tarea.client || "—",
+      categoria: mapeo.categoria,
+      subcategoria: mapeo.subcategoria,
+      descripcion: `Generada automáticamente al completar la tarea: "${tarea.title}". ${tarea.description || ""}`.trim(),
+      estatus: "cerrada",
+      created_by: tarea.assigned_to || null,
+    }]);
+  };
+
   const move = async (id, status) => {
     await supabase.from("tareas").update({status}).eq("id",id);
-    // Si se completa "papeles de trabajo" de un cliente, disparar DIOT para Jessiel
     if (status === "done") {
       const tarea = tasks.find(t=>t.id===id);
+
+      // Cualquier tarea proveniente de un proceso automatizado genera su Orden de Trabajo al completarse
+      if (tarea?.proceso && PROCESO_A_OT[tarea.proceso]) {
+        await crearOrdenTrabajoDesdeTask(tarea);
+      }
+
+      // Si se completa "papeles de trabajo" de un cliente, disparar DIOT para Jessiel
       if (tarea?.proceso === "papeles_trabajo_mensual" && tarea.client) {
         const yaExiste = tasks.some(t => t.proceso === "diot_automatica" && t.client === tarea.client &&
           new Date(t.created_at).getMonth() === new Date().getMonth() && new Date(t.created_at).getFullYear() === new Date().getFullYear());
@@ -4250,7 +4289,7 @@ function OrdenesTrabajoModule({ user }) {
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:C.panel}}>
-                {["Folio","Cliente","Categoría","Subcategoría","Descripción","Fecha","Acciones"].map(h=>(
+                {["Folio","Cliente","Categoría","Subcategoría","Origen","Descripción","Fecha","Acciones"].map(h=>(
                   <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
                 ))}
               </tr>
@@ -4264,6 +4303,13 @@ function OrdenesTrabajoModule({ user }) {
                     <span style={{background:C.navyDim,color:C.navy,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{ot.categoria}</span>
                   </td>
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{ot.subcategoria||"—"}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    {ot.estatus==="cerrada" ? (
+                      <span style={{background:C.greenBg,color:C.green,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>✓ Automática</span>
+                    ) : (
+                      <span style={{background:C.navyDim,color:C.navy,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>Manual</span>
+                    )}
+                  </td>
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ot.descripcion}</td>
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12,whiteSpace:"nowrap"}}>{new Date(ot.created_at).toLocaleDateString("es-MX")}</td>
                   <td style={{padding:"12px 14px"}}>
