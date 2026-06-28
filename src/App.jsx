@@ -3631,8 +3631,9 @@ function CedulaImpuestosModule({ user }) {
   const [saving, setSaving] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
-  const [mes, setMes] = useState(new Date().getMonth()+1);
-  const [anio, setAnio] = useState(new Date().getFullYear());
+  const { mes: mesContableC, anio: anioContableC } = mesContableActual();
+  const [mes, setMes] = useState(mesContableC);
+  const [anio, setAnio] = useState(anioContableC);
   const [isrCausado, setIsrCausado] = useState("");
   const [isrRetenido, setIsrRetenido] = useState("");
   const [ivaCausado, setIvaCausado] = useState("");
@@ -3802,6 +3803,9 @@ function CedulaImpuestosModule({ user }) {
             {[anio-1,anio,anio+1].map(a=><option key={a} value={a}>{a}</option>)}
           </FieldSelect>
         </div>
+        <div style={{color:C.muted,fontSize:11,marginTop:-10,marginBottom:14}}>
+          📌 Preseleccionado el mes contable de trabajo ({MESES[mesContableC-1]} {anioContableC}). Ajusta si la cédula es de otro período.
+        </div>
 
         <div style={{color:C.navy,fontWeight:700,fontSize:14,margin:"16px 0 10px"}}>ISR</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -3856,6 +3860,14 @@ const CLIENTES_IMSS_PAGOS = [
 ];
 
 const norm = (s) => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+
+// Contablemente, en el mes en curso se trabaja la información del mes anterior
+function mesContableActual() {
+  const hoy = new Date();
+  const m = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+  const a = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+  return { mes:m, anio:a };
+}
 
 // Empareja un nombre de la lista de procesos contra los clientes reales en la BD (tolera mayúsc/acentos)
 function matchClienteReal(nombreProceso, clientesReales) {
@@ -4599,8 +4611,9 @@ function ReporteMensualModule() {
   const [ordenes, setOrdenes] = useState([]);
   const [perfiles, setPerfiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mes, setMes] = useState(new Date().getMonth()+1);
-  const [anio, setAnio] = useState(new Date().getFullYear());
+  const { mes: mesContableR, anio: anioContableR } = mesContableActual();
+  const [mes, setMes] = useState(mesContableR);
+  const [anio, setAnio] = useState(anioContableR);
   const [filtroColaborador, setFiltroColaborador] = useState("");
 
   const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -4652,6 +4665,10 @@ function ReporteMensualModule() {
       <div style={{marginBottom:20,animation:"fadeUp 0.3s ease"}}>
         <h1 style={{margin:"0 0 4px",color:C.navy,fontSize:22,fontWeight:800}}>Reporte Mensual</h1>
         <p style={{margin:0,color:C.muted,fontSize:13}}>Panorama completo de tareas y órdenes de trabajo del mes</p>
+      </div>
+
+      <div style={{color:C.muted,fontSize:12,marginBottom:14}}>
+        Mostrando por defecto el mes contable de trabajo: <strong style={{color:C.navy}}>{MESES[mesContableR-1]} {anioContableR}</strong>. Cambia el selector para ver otro período.
       </div>
 
       {/* Filtros */}
