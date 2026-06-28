@@ -253,7 +253,8 @@ const NAV_COFSA = [
   { id:"impuestos", icon:"📋", label:"Impuestos" },
   { id:"ordenes", icon:"🛠️", label:"Órdenes de Trabajo" },
   { id:"cedulas", icon:"📊", label:"Cédulas de Impuestos" },
-  { id:"reporte", icon:"📈", label:"Reporte Mensual" },
+  { id:"seguimiento", icon:"📈", label:"Seguimiento" },
+  { id:"reporte", icon:"📊", label:"Reporte Mensual" },
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
@@ -4339,6 +4340,248 @@ function OrdenesTrabajoModule({ user }) {
   );
 }
 
+// ── SEGUIMIENTO ───────────────────────────────────────────────────────────
+
+const SEGUIMIENTO_TABLEROS = {
+  constancias: {
+    label: "Constancias y Opiniones",
+    icono: "📜",
+    columnas: [
+      { key:"constancia_sat", label:"Constancia Sit. Fiscal (SAT)" },
+      { key:"opinion_sat", label:"Opinión Cumplimiento SAT" },
+      { key:"opinion_imss", label:"Opinión Cumplimiento IMSS" },
+      { key:"opinion_infonavit", label:"Opinión Cumplimiento INFONAVIT" },
+    ],
+    clientesDefault: CLIENTES_CONSTANCIAS,
+  },
+  pagos_imss: {
+    label: "Pagos de IMSS",
+    icono: "🏥",
+    columnas: [
+      { key:"solicitado", label:"Solicitado" },
+      { key:"sipare", label:"SIPARE" },
+      { key:"desglose_idse", label:"Desglose IDSE" },
+      { key:"sua", label:"SUA" },
+      { key:"extemporaneo", label:"Extemporáneo" },
+    ],
+    clientesDefault: CLIENTES_IMSS_PAGOS,
+  },
+  papeles_trabajo: {
+    label: "Papeles de Trabajo",
+    icono: "📁",
+    columnas: [ { key:"papeles_trabajo", label:"Papeles de Trabajo" } ],
+    clientesDefault: null, // usa todos los clientes reales
+  },
+  cedula_impuestos: {
+    label: "Cédula de Impuestos",
+    icono: "📊",
+    columnas: [ { key:"cedula", label:"Cédula de Impuestos" } ],
+    clientesDefault: null,
+  },
+  presentacion_impuestos: {
+    label: "Presentación de Impuestos",
+    icono: "💰",
+    columnas: [ { key:"presentacion", label:"Presentación de Declaración" } ],
+    clientesDefault: null,
+  },
+  diot: {
+    label: "Presentación DIOT",
+    icono: "📑",
+    columnas: [ { key:"diot", label:"Declaración Informativa DIOT" } ],
+    clientesDefault: null,
+  },
+};
+
+const ESTATUS_SEGUIMIENTO = {
+  realizado:    { label:"Realizado",    color:C.green,  bg:C.greenBg },
+  en_proceso:   { label:"En proceso",   color:"#7C3AED", bg:"#EEE9FB" },
+  no_realizado: { label:"No realizado", color:C.red,    bg:C.redBg },
+  no_aplica:    { label:"No aplica",    color:C.muted,  bg:C.panel },
+};
+
+function SeguimientoModule() {
+  const [tableroActivo, setTableroActivo] = useState("constancias");
+  const [mes, setMes] = useState(new Date().getMonth()+1);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [clientesReales, setClientesReales] = useState([]);
+  const [celdas, setCeldas] = useState({}); // key: cliente|concepto -> {estatus, nota, id}
+  const [loading, setLoading] = useState(true);
+  const [editNota, setEditNota] = useState(null); // {cliente, concepto}
+
+  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const tablero = SEGUIMIENTO_TABLEROS[tableroActivo];
+
+  const load = async () => {
+    setLoading(true);
+    const [cl, sg] = await Promise.all([
+      supabase.from("clientes").select("*").order("name"),
+      supabase.from("seguimiento_celdas").select("*").eq("tablero", tableroActivo).eq("mes", mes).eq("anio", anio),
+    ]);
+    setClientesReales(cl.data || []);
+    const map = {};
+    (sg.data||[]).forEach(c => { map[`${c.cliente_nombre}|${c.concepto}`] = c; });
+    setCeldas(map);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); }, [tableroActivo, mes, anio]);
+
+  // Lista de clientes a mostrar: si el tablero tiene lista fija, usarla emparejada con reales; sino todos los reales
+  const listaClientes = (() => {
+    if (tablero.clientesDefault) {
+      return tablero.clientesDefault.map(nombreProc => {
+        const match = matchClienteReal(nombreProc, clientesReales);
+        return match?.name || nombreProc;
+      });
+    }
+    return clientesReales.map(c=>c.name);
+  })();
+
+  const cambiarEstatus = async (clienteNombre, concepto, nuevoEstatus) => {
+    const key = `${clienteNombre}|${concepto}`;
+    const existente = celdas[key];
+    if (existente?.id) {
+      await supabase.from("seguimiento_celdas").update({ estatus: nuevoEstatus, updated_at: new Date().toISOString() }).eq("id", existente.id);
+    } else {
+      await supabase.from("seguimiento_celdas").insert([{
+        tablero: tableroActivo, cliente_nombre: clienteNombre, concepto, mes, anio, estatus: nuevoEstatus,
+      }]);
+    }
+    load();
+  };
+
+  const guardarNota = async (clienteNombre, concepto, nota) => {
+    const key = `${clienteNombre}|${concepto}`;
+    const existente = celdas[key];
+    if (existente?.id) {
+      await supabase.from("seguimiento_celdas").update({ nota }).eq("id", existente.id);
+    } else {
+      await supabase.from("seguimiento_celdas").insert([{
+        tablero: tableroActivo, cliente_nombre: clienteNombre, concepto, mes, anio, estatus:"no_realizado", nota,
+      }]);
+    }
+    setEditNota(null);
+    load();
+  };
+
+  // Resumen de cumplimiento
+  const totalCeldas = listaClientes.length * tablero.columnas.length;
+  const realizadas = Object.values(celdas).filter(c=>c.estatus==="realizado").length;
+  const pctCumplimiento = totalCeldas > 0 ? Math.round((realizadas / totalCeldas) * 100) : 0;
+
+  const cambiarMes = (delta) => {
+    let m = mes + delta, a = anio;
+    if (m > 12) { m = 1; a++; }
+    if (m < 1) { m = 12; a--; }
+    setMes(m); setAnio(a);
+  };
+
+  const EstatusDropdown = ({ clienteNombre, concepto }) => {
+    const key = `${clienteNombre}|${concepto}`;
+    const celda = celdas[key];
+    const estatus = celda?.estatus || "no_realizado";
+    const cfg = ESTATUS_SEGUIMIENTO[estatus];
+    return (
+      <select value={estatus} onChange={e=>cambiarEstatus(clienteNombre, concepto, e.target.value)}
+        style={{
+          background:cfg.bg, color:cfg.color, border:`1.5px solid ${cfg.color}44`, borderRadius:8,
+          padding:"6px 10px", fontSize:11.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+          outline:"none", width:"100%", appearance:"none", textAlign:"center",
+        }}>
+        {Object.entries(ESTATUS_SEGUIMIENTO).map(([k,v])=>(
+          <option key={k} value={k}>{v.label}</option>
+        ))}
+      </select>
+    );
+  };
+
+  return (
+    <div style={{ padding:28 }}>
+      <style>{ANIM}</style>
+      <div style={{ marginBottom:20, animation:"fadeUp 0.3s ease" }}>
+        <h1 style={{ margin:"0 0 4px", color:C.navy, fontSize:22, fontWeight:800 }}>Seguimiento de Procesos</h1>
+        <p style={{ margin:0, color:C.muted, fontSize:13 }}>Visibilidad completa del cumplimiento mensual por cliente</p>
+      </div>
+
+      {/* Selector de tablero */}
+      <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
+        {Object.entries(SEGUIMIENTO_TABLEROS).map(([id,t])=>(
+          <button key={id} onClick={()=>setTableroActivo(id)} style={{
+            display:"flex", alignItems:"center", gap:7, padding:"9px 16px", borderRadius:10,
+            border:`1.5px solid ${tableroActivo===id?C.navy:C.border}`,
+            background:tableroActivo===id?C.navy:"transparent",
+            color:tableroActivo===id?C.white:C.muted,
+            cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12.5, transition:"all 0.15s",
+          }}>
+            <span>{t.icono}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Navegación de mes + resumen */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, flexWrap:"wrap", gap:12 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <button onClick={()=>cambiarMes(-1)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:9, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14 }}>←</button>
+          <div style={{ color:C.navy, fontWeight:800, fontSize:16, minWidth:160, textAlign:"center" }}>{MESES[mes-1]} {anio}</div>
+          <button onClick={()=>cambiarMes(1)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:9, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14 }}>→</button>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:140, height:10, background:C.border, borderRadius:6, overflow:"hidden" }}>
+            <div style={{ width:`${pctCumplimiento}%`, height:"100%", background: pctCumplimiento>=80?C.green:pctCumplimiento>=40?"#D97706":C.red, transition:"width 0.3s" }} />
+          </div>
+          <span style={{ color:C.navy, fontWeight:700, fontSize:13 }}>{pctCumplimiento}% cumplido</span>
+        </div>
+      </div>
+
+      {loading ? <Spinner/> : listaClientes.length === 0 ? (
+        <div style={{ textAlign:"center", padding:50, color:C.muted }}>No hay clientes para este tablero.</div>
+      ) : (
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth: 400 + tablero.columnas.length*170 }}>
+              <thead>
+                <tr style={{ background:C.navy }}>
+                  <th style={{ padding:"10px 14px", color:C.white, fontSize:11, fontWeight:700, textAlign:"left", textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap", position:"sticky", left:0, background:C.navy, zIndex:2 }}>Cliente</th>
+                  {tablero.columnas.map(col=>(
+                    <th key={col.key} style={{ padding:"10px 14px", color:C.white, fontSize:11, fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{col.label}</th>
+                  ))}
+                  <th style={{ padding:"10px 14px", color:C.white, fontSize:11, fontWeight:700, textAlign:"left", textTransform:"uppercase" }}>Nota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listaClientes.map((clienteNombre, i) => {
+                  const notaKey = `${clienteNombre}|${tablero.columnas[0].key}`;
+                  const notaActual = celdas[notaKey]?.nota || "";
+                  return (
+                    <tr key={clienteNombre} style={{ background: i%2===0?"white":C.panel, borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"10px 14px", color:C.navy, fontWeight:700, fontSize:12.5, whiteSpace:"nowrap", position:"sticky", left:0, background: i%2===0?"white":C.panel, zIndex:1 }}>{clienteNombre}</td>
+                      {tablero.columnas.map(col=>(
+                        <td key={col.key} style={{ padding:"8px 10px", minWidth:160 }}>
+                          <EstatusDropdown clienteNombre={clienteNombre} concepto={col.key} />
+                        </td>
+                      ))}
+                      <td style={{ padding:"8px 14px", minWidth:160 }}>
+                        {editNota && editNota.cliente===clienteNombre ? (
+                          <input autoFocus defaultValue={notaActual} onBlur={e=>guardarNota(clienteNombre, tablero.columnas[0].key, e.target.value)}
+                            onKeyDown={e=>e.key==="Enter"&&guardarNota(clienteNombre, tablero.columnas[0].key, e.target.value)}
+                            style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:7, padding:"5px 8px", fontSize:12, fontFamily:"inherit", outline:"none" }} />
+                        ) : (
+                          <div onClick={()=>setEditNota({cliente:clienteNombre})} style={{ cursor:"pointer", color:notaActual?C.text:C.muted, fontSize:11.5, fontStyle:notaActual?"normal":"italic" }}>
+                            {notaActual || "Agregar nota…"}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ── REPORTE MENSUAL ───────────────────────────────────────────────────────
 
 function ReporteMensualModule() {
@@ -5325,6 +5568,7 @@ export default function App() {
     nomina: <CalculosModule />,
     ordenes: <OrdenesTrabajoModule user={user} />,
     cedulas: <CedulaImpuestosModule user={user} />,
+    seguimiento: <SeguimientoModule />,
     reporte: <ReporteMensualModule />,
     cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
