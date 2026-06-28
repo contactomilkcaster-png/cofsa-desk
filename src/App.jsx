@@ -351,14 +351,16 @@ function Sidebar({ active, onNav, user, onLogout, notifCount, empresa, setEmpres
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
-function Dashboard({ tasks }) {
+function Dashboard({ taxes, tasks }) {
+  const pending = taxes.filter(t=>t.status==="pendiente");
+  const presented = taxes.filter(t=>t.status==="presentado");
   const activeTasks = tasks.filter(t=>t.status!=="done");
-  const doneTasks = tasks.filter(t=>t.status==="done");
   const overdue = activeTasks.filter(t=>t.due_date && new Date(t.due_date)<new Date());
 
   const cards = [
+    { label:"Impuestos pendientes", value:pending.length, icon:"📋", color:C.yellow, bg:C.yellowBg, border:C.yellow },
+    { label:"Impuestos presentados", value:presented.length, icon:"✅", color:C.green, bg:C.greenBg, border:C.green },
     { label:"Tareas activas", value:activeTasks.length, icon:"✓", color:C.accent, bg:C.navyDim, border:C.accent },
-    { label:"Tareas completadas", value:doneTasks.length, icon:"✅", color:C.green, bg:C.greenBg, border:C.green },
     { label:"Tareas vencidas", value:overdue.length, icon:"⚠️", color:C.red, bg:C.redBg, border:C.red },
   ];
 
@@ -381,21 +383,657 @@ function Dashboard({ tasks }) {
         ))}
       </div>
 
-      <Card>
-        <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7, fontSize:13 }}>✓</span> Tareas pendientes
-        </div>
-        {activeTasks.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin tareas pendientes 🎉</div>}
-        {activeTasks.slice(0,8).map((t,i)=>(
-          <div key={t.id} className="row-hover" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<7?`1px solid ${C.border}`:"none" }}>
-            <div>
-              <div style={{ color:C.text, fontSize:13, fontWeight:600 }}>{t.title}</div>
-              <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{t.client ? `${t.client} · ` : ""}{t.due_date||"Sin fecha"}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
+        <Card>
+          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.yellowBg, padding:"4px 8px", borderRadius:7, fontSize:13 }}>📋</span> Impuestos pendientes
+          </div>
+          {pending.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin pendientes — todo al día 🎉</div>}
+          {pending.slice(0,5).map((t,i)=>(
+            <div key={t.id} className="row-hover" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<4?`1px solid ${C.border}`:"none" }}>
+              <div>
+                <div style={{ color:C.text, fontSize:13, fontWeight:600 }}>{t.client}</div>
+                <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{t.tax_type} · {MONTHS[(t.month||1)-1]} {t.year}</div>
+              </div>
+              <StatusBadge status="pendiente" />
             </div>
-            <PriorityBadge priority={t.priority} />
+          ))}
+        </Card>
+
+        <Card>
+          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7, fontSize:13 }}>✓</span> Tareas pendientes
+          </div>
+          {activeTasks.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin tareas pendientes 🎉</div>}
+          {activeTasks.slice(0,5).map((t,i)=>(
+            <div key={t.id} className="row-hover" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<4?`1px solid ${C.border}`:"none" }}>
+              <div>
+                <div style={{ color:C.text, fontSize:13, fontWeight:600 }}>{t.title}</div>
+                <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{t.due_date||"Sin fecha"}</div>
+              </div>
+              <PriorityBadge priority={t.priority} />
+            </div>
+          ))}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ── IMPUESTOS ──────────────────────────────────────────────────────────────
+function ImpuestosModule({ user, initialClient = "", initialStatus = "todos" }) {
+  const [taxes, setTaxes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [setupNeeded, setSetupNeeded] = useState(false);
+  const [filter, setFilter] = useState(initialStatus);
+  const [filterClient, setFilterClient] = useState(initialClient);
+  const [clients, setClients] = useState([]);
+  const [form, setForm] = useState({ client:"", tax_type:TAX_TYPES[0], month:1, year:new Date().getFullYear(), status:"pendiente", notes:"" });
+
+  const load = async () => {
+    setLoading(true);
+    const [imp, cli] = await Promise.all([
+      supabase.from("impuestos").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+    ]);
+    setLoading(false);
+    if (imp.error) { setSetupNeeded(true); return; }
+    setTaxes(imp.data||[]);
+    setClients((cli.data||[]).map(c=>c.name));
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const save = async () => {
+    setSaving(true);
+    const { error:err } = await supabase.from("impuestos").insert([{...form, created_by:user.id}]);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    setShowAdd(false); load();
+  };
+
+  const updateStatus = async (id, status) => {
+    await supabase.from("impuestos").update({status}).eq("id",id); load();
+  };
+
+  if (setupNeeded) return <SetupBanner />;
+
+  const filtered = taxes.filter(t=>filter==="todos"||t.status===filter).filter(t=>!filterClient||t.client.toLowerCase().includes(filterClient.toLowerCase()));
+
+  return (
+    <div style={{ padding:28 }}>
+      <style>{ANIM}</style>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, animation:"fadeUp 0.3s ease" }}>
+        <div>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800, fontFamily:"'Montserrat', sans-serif" }}>Control de Impuestos</h1>
+          <p style={{ margin:0, color:C.muted, fontSize:13 }}>{taxes.length} registros totales</p>
+        </div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Agregar registro</Btn>
+      </div>
+
+      <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
+        {["todos","pendiente","en revisión","presentado"].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} style={{ padding:"7px 16px", borderRadius:20, border:`1.5px solid ${filter===s?C.navy:C.border}`, background:filter===s?C.navy:"transparent", color:filter===s?C.white:C.muted, cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit", transition:"all 0.15s", textTransform:"capitalize" }}>{s}</button>
+        ))}
+        <input value={filterClient} onChange={e=>setFilterClient(e.target.value)} placeholder="Buscar cliente…"
+          style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:20, padding:"7px 16px", color:C.text, fontSize:13, outline:"none", fontFamily:"inherit" }} />
+      </div>
+
+      <ErrorBanner msg={error} />
+
+      {loading ? <Spinner /> : (
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 1.5fr 70px 60px 130px 180px", padding:"12px 20px", background:C.panel, borderBottom:`1px solid ${C.border}`, color:C.muted, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            <span>Cliente</span><span>Tipo</span><span>Mes</span><span>Año</span><span>Estatus</span><span>Acciones</span>
+          </div>
+          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:C.muted, fontSize:14 }}>No hay registros — agrega el primero ↗</div>}
+          {filtered.map((t,i)=>(
+            <div key={t.id} className="row-hover" style={{ display:"grid", gridTemplateColumns:"2fr 1.5fr 70px 60px 130px 180px", padding:"14px 20px", borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none", alignItems:"center" }}>
+              <div style={{ color:C.text, fontSize:14, fontWeight:600 }}>{t.client}</div>
+              <div style={{ color:C.muted, fontSize:13 }}>{t.tax_type}</div>
+              <div style={{ color:C.muted, fontSize:13 }}>{MONTHS[(t.month||1)-1]}</div>
+              <div style={{ color:C.muted, fontSize:13 }}>{t.year}</div>
+              <StatusBadge status={t.status} />
+              <div style={{ display:"flex", gap:6 }}>
+                {t.status!=="presentado" && <Btn variant="success" onClick={()=>updateStatus(t.id,"presentado")} style={{ padding:"5px 12px", fontSize:12 }}>✓ Presentado</Btn>}
+                {t.status==="pendiente" && <Btn variant="ghost" onClick={()=>updateStatus(t.id,"en revisión")} style={{ padding:"5px 12px", fontSize:12 }}>Revisar</Btn>}
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {showAdd && (
+        <Modal title="Nuevo registro de impuesto" onClose={()=>setShowAdd(false)}>
+          <ErrorBanner msg={error} />
+          <FieldSelect label="Cliente" value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))}>
+            <option value="">— Seleccionar cliente —</option>
+            {clients.map(c=><option key={c}>{c}</option>)}
+          </FieldSelect>
+          <FieldSelect label="Tipo de impuesto" value={form.tax_type} onChange={e=>setForm(p=>({...p,tax_type:e.target.value}))}>
+            {TAX_TYPES.map(t=><option key={t}>{t}</option>)}
+          </FieldSelect>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <FieldSelect label="Mes" value={form.month} onChange={e=>setForm(p=>({...p,month:+e.target.value}))}>
+              {MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+            </FieldSelect>
+            <Input label="Año" type="number" value={form.year} onChange={e=>setForm(p=>({...p,year:+e.target.value}))} />
+          </div>
+          <FieldSelect label="Estatus" value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))}>
+            <option value="pendiente">Pendiente</option>
+            <option value="en revisión">En revisión</option>
+            <option value="presentado">Presentado</option>
+          </FieldSelect>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
+            <Btn onClick={save} loading={saving}>Guardar</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── TAREAS ─────────────────────────────────────────────────────────────────
+const COLS = [
+  { id:"todo", label:"Por hacer", color:C.muted, bg:"#F8FAFC" },
+  { id:"inprogress", label:"En proceso", color:C.accent, bg:C.navyDim },
+  { id:"review", label:"En revisión", color:C.yellow, bg:C.yellowBg },
+  { id:"done", label:"Completado", color:C.green, bg:C.greenBg },
+];
+
+function TareasModule({ user, initialClient = "" }) {
+  const [tasks, setTasks] = useState([]);
+  const [perfiles, setPerfiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [setupNeeded, setSetupNeeded] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [view, setView] = useState("kanban");
+  const [notif, setNotif] = useState(null);
+  const [clientFilter, setClientFilter] = useState(initialClient);
+  const [userFilter, setUserFilter] = useState(null); // null = todos
+  const [clients, setClients] = useState([]);
+  const [form, setForm] = useState({ title:"", description:"", priority:"media", due_date:"", client:initialClient, assigned_to:user.id });
+
+  const COLORS = ["#2E4A8C","#16A34A","#D97706","#DC2626","#7C3AED","#0891B2"];
+  const colorForUser = (id) => COLORS[(id?.charCodeAt(0)||0) % COLORS.length];
+
+  const load = async () => {
+    setLoading(true);
+    const [tar, cli, per] = await Promise.all([
+      supabase.from("tareas").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+      supabase.from("perfiles").select("*").order("nombre"),
+    ]);
+    setLoading(false);
+    if (tar.error) { setSetupNeeded(true); return; }
+    setTasks(tar.data||[]);
+    setClients((cli.data||[]).map(c=>c.name));
+    setPerfiles(per.data||[]);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  useEffect(()=>{
+    const ch = supabase.channel("tareas-rt").on("postgres_changes",{event:"*",schema:"public",table:"tareas"},()=>load()).subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[]);
+
+  const save = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    const { error:err } = await supabase.from("tareas").insert([{...form, status:"todo", created_by:user.id}]);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    setShowAdd(false);
+    setForm({ title:"", description:"", priority:"media", due_date:"", client:"", assigned_to:user.id });
+    setNotif("✅ Tarea creada y asignada correctamente");
+    setTimeout(()=>setNotif(null), 3500);
+    load();
+  };
+
+  // Mapea el "proceso" de una tarea automática a categoría/subcategoría de Orden de Trabajo
+  const PROCESO_A_OT = {
+    constancias_mensuales:      { categoria:"SAT",         subcategoria:null },
+    pagos_imss_mensuales:       { categoria:"IMSS",        subcategoria:null },
+    papeles_trabajo_mensual:    { categoria:"Cálculos",    subcategoria:null },
+    archivar_papeleria_mensual: { categoria:"Cálculos",    subcategoria:null },
+    nomina_ramiro_semanal:      { categoria:"Cálculos",    subcategoria:"Nómina" },
+    diot_automatica:            { categoria:"Declaración", subcategoria:"Informativa" },
+    presentacion_declaracion_automatica: { categoria:"Declaración", subcategoria:"Mensual" },
+  };
+
+  const generarFolioOT = () => `OT-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+  const crearOrdenTrabajoDesdeTask = async (tarea) => {
+    const mapeo = PROCESO_A_OT[tarea.proceso];
+    if (!mapeo) return; // Solo tareas que vienen de un proceso automatizado generan OT
+    let clienteId = null;
+    if (tarea.client) {
+      const { data: clienteData } = await supabase.from("clientes").select("id").eq("name", tarea.client).maybeSingle();
+      clienteId = clienteData?.id || null;
+    }
+    await supabase.from("ordenes_trabajo").insert([{
+      folio: generarFolioOT(),
+      cliente_id: clienteId,
+      cliente_nombre: tarea.client || "—",
+      categoria: mapeo.categoria,
+      subcategoria: mapeo.subcategoria,
+      descripcion: `Generada automáticamente al completar la tarea: "${tarea.title}". ${tarea.description || ""}`.trim(),
+      estatus: "cerrada",
+      created_by: tarea.assigned_to || null,
+    }]);
+  };
+
+  const move = async (id, status) => {
+    await supabase.from("tareas").update({status}).eq("id",id);
+    if (status === "done") {
+      const tarea = tasks.find(t=>t.id===id);
+
+      // Cualquier tarea proveniente de un proceso automatizado genera su Orden de Trabajo al completarse
+      if (tarea?.proceso && PROCESO_A_OT[tarea.proceso]) {
+        await crearOrdenTrabajoDesdeTask(tarea);
+      }
+
+      // Si se completa "papeles de trabajo" de un cliente, disparar DIOT para Jessiel
+      if (tarea?.proceso === "papeles_trabajo_mensual" && tarea.client) {
+        const yaExiste = tasks.some(t => t.proceso === "diot_automatica" && t.client === tarea.client &&
+          new Date(t.created_at).getMonth() === new Date().getMonth() && new Date(t.created_at).getFullYear() === new Date().getFullYear());
+        if (!yaExiste) {
+          const { data: perfilJessiel } = await supabase.from("perfiles").select("id").eq("email", EMAIL_JESSIEL).maybeSingle();
+          const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+          const hoy = new Date();
+          await supabase.from("tareas").insert([{
+            title: `Declaración Informativa DIOT — ${tarea.client}`,
+            description: `Presentar la Declaración Informativa de Operaciones con Terceros (DIOT) del cliente ${tarea.client}, correspondiente a ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}. Generada automáticamente al completar los papeles de trabajo.`,
+            assigned_to: perfilJessiel?.id || null,
+            client: tarea.client, priority:"alta", status:"todo",
+            proceso: "diot_automatica",
+          }]);
+        }
+      }
+    }
+    load();
+  };
+  const del = async (id) => { await supabase.from("tareas").delete().eq("id",id); load(); };
+
+  if (setupNeeded) return <SetupBanner />;
+
+  // Aplicar filtros
+  let filteredTasks = tasks;
+  if (clientFilter) filteredTasks = filteredTasks.filter(t=>t.client===clientFilter);
+  if (userFilter) filteredTasks = filteredTasks.filter(t=>t.assigned_to===userFilter);
+
+  const getPerfil = (id) => perfiles.find(p=>p.id===id);
+
+  const TaskCard = ({ task }) => {
+    const col = COLS.find(c=>c.id===task.status)||COLS[0];
+    const isOverdue = task.due_date && new Date(task.due_date)<new Date() && task.status!=="done";
+    const perfil = getPerfil(task.assigned_to);
+    const initials = perfil ? perfil.nombre.substring(0,2).toUpperCase() : "??";
+    const color = colorForUser(task.assigned_to);
+    return (
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:11, padding:14, marginBottom:9, borderLeft:`3px solid ${isOverdue?C.red:col.color}`, boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+          <div style={{ color:C.text, fontSize:13, fontWeight:600, lineHeight:1.4, flex:1 }}>{task.title}</div>
+          {/* Avatar del responsable */}
+          <div title={perfil?.nombre||"Sin asignar"} style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color, flexShrink:0, marginLeft:8 }}>{initials}</div>
+        </div>
+        {task.description && <div style={{ color:C.muted, fontSize:12, marginBottom:8, lineHeight:1.5 }}>{task.description}</div>}
+        {task.client && <div style={{ color:C.muted, fontSize:11, marginBottom:8 }}>👥 {task.client}</div>}
+        {perfil && <div style={{ color, fontSize:11, marginBottom:8, fontWeight:600 }}>👤 {perfil.nombre}</div>}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <PriorityBadge priority={task.priority} />
+          {task.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, fontWeight:isOverdue?600:400 }}>{isOverdue?"⚠️ ":"📅 "}{task.due_date}</span>}
+        </div>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          {COLS.filter(c=>c.id!==task.status).map(c=>(
+            <button key={c.id} onClick={()=>move(task.id,c.id)} style={{ padding:"3px 9px", borderRadius:6, background:c.bg, border:`1px solid ${c.color}44`, color:c.color, fontSize:10, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>→ {c.label}</button>
+          ))}
+          <button onClick={()=>del(task.id)} style={{ padding:"3px 9px", borderRadius:6, background:C.redBg, border:`1px solid ${C.red}44`, color:C.red, fontSize:10, cursor:"pointer", fontFamily:"inherit" }}>✕</button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ padding:28, height:"calc(100vh - 0px)", overflowY:"auto" }}>
+      <style>{ANIM}</style>
+      {notif && <div style={{ position:"fixed", top:20, right:20, zIndex:2000, background:C.navy, borderRadius:12, padding:"14px 20px", color:C.white, fontSize:14, fontWeight:600, boxShadow:"0 8px 32px rgba(27,42,74,0.3)", animation:"slideIn 0.3s ease" }}>{notif}</div>}
+
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, animation:"fadeUp 0.3s ease" }}>
+        <div>
+          <h1 style={{ margin:"0 0 2px", color:C.navy, fontSize:22, fontWeight:800 }}>Tareas</h1>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
+            <p style={{ margin:0, color:C.muted, fontSize:13 }}>{filteredTasks.length} tareas{clientFilter?` · ${clientFilter}`:""}{ userFilter?` · ${getPerfil(userFilter)?.nombre||""}`:""}</p>
+            {(clientFilter||userFilter) && <button onClick={()=>{setClientFilter("");setUserFilter(null);}} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>✕ Quitar filtros</button>}
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:10 }}>
+          <div style={{ display:"flex", background:C.surface, borderRadius:9, border:`1.5px solid ${C.border}`, overflow:"hidden" }}>
+            {["kanban","lista"].map(v=>(
+              <button key={v} onClick={()=>setView(v)} style={{ padding:"8px 16px", background:view===v?C.navy:"transparent", border:"none", color:view===v?C.white:C.muted, cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit", transition:"all 0.15s", textTransform:"capitalize" }}>{v}</button>
+            ))}
+          </div>
+          <Btn onClick={()=>setShowAdd(true)}>+ Nueva tarea</Btn>
+        </div>
+      </div>
+
+      {/* Filtro por colaborador */}
+      {perfiles.length > 0 && (
+        <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+          <span style={{ color:C.muted, fontSize:12, fontWeight:600 }}>Filtrar por:</span>
+          {/* Botón "Todos" */}
+          <button onClick={()=>setUserFilter(null)} style={{
+            display:"flex", alignItems:"center", gap:7, padding:"6px 14px",
+            borderRadius:20, border:`1.5px solid ${!userFilter?C.navy:C.border}`,
+            background:!userFilter?C.navy:"transparent",
+            color:!userFilter?C.white:C.muted,
+            cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+          }}>
+            <span style={{ fontSize:14 }}>👥</span> Todos ({tasks.length})
+          </button>
+          {/* Avatar por colaborador */}
+          {perfiles.map(p=>{
+            const count = tasks.filter(t=>t.assigned_to===p.id).length;
+            const color = colorForUser(p.id);
+            const isActive = userFilter===p.id;
+            return (
+              <button key={p.id} onClick={()=>setUserFilter(isActive?null:p.id)} style={{
+                display:"flex", alignItems:"center", gap:8, padding:"6px 14px 6px 8px",
+                borderRadius:20, border:`1.5px solid ${isActive?color:C.border}`,
+                background:isActive?color+"22":"transparent",
+                color:isActive?color:C.muted,
+                cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+              }}>
+                <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>
+                  {p.nombre.substring(0,2).toUpperCase()}
+                </div>
+                {p.nombre} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <ErrorBanner msg={error} />
+
+      {loading ? <Spinner /> : view==="kanban" ? (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:14 }}>
+          {COLS.map(col=>{
+            const colTasks = filteredTasks.filter(t=>t.status===col.id);
+            return (
+              <div key={col.id} style={{ background:col.bg, border:`1.5px solid ${col.color}22`, borderRadius:13, padding:14, minHeight:200 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14, paddingBottom:10, borderBottom:`1px solid ${col.color}22` }}>
+                  <div style={{ color:col.color, fontWeight:700, fontSize:12, textTransform:"uppercase", letterSpacing:"0.07em" }}>{col.label}</div>
+                  <span style={{ background:col.color+"22", color:col.color, borderRadius:10, fontSize:11, fontWeight:700, padding:"1px 8px" }}>{colTasks.length}</span>
+                </div>
+                {colTasks.map(t=><TaskCard key={t.id} task={t} />)}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          {filteredTasks.length===0 && <div style={{ padding:40, textAlign:"center", color:C.muted }}>Sin tareas — crea la primera ↗</div>}
+          {filteredTasks.map((t,i)=>{
+            const isOverdue = t.due_date && new Date(t.due_date)<new Date() && t.status!=="done";
+            const col = COLS.find(c=>c.id===t.status)||COLS[0];
+            const perfil = getPerfil(t.assigned_to);
+            const color = colorForUser(t.assigned_to);
+            return (
+              <div key={t.id} className="row-hover" style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:i<filteredTasks.length-1?`1px solid ${C.border}`:"none" }}>
+                <div style={{ width:3, height:40, borderRadius:2, background:col.color, flexShrink:0 }} />
+                <div style={{ flex:1 }}>
+                  <div style={{ color:C.text, fontSize:13, fontWeight:600 }}>{t.title}</div>
+                  {t.client && <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{t.client}</div>}
+                </div>
+                {perfil && (
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>{perfil.nombre.substring(0,2).toUpperCase()}</div>
+                    <span style={{ fontSize:12, color, fontWeight:600 }}>{perfil.nombre}</span>
+                  </div>
+                )}
+                <Badge label={col.label} color={col.color} bg={col.bg} />
+                <PriorityBadge priority={t.priority} />
+                {t.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, whiteSpace:"nowrap" }}>{isOverdue?"⚠️ ":""}{t.due_date}</span>}
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
+      {showAdd && (
+        <Modal title="Nueva tarea" onClose={()=>setShowAdd(false)}>
+          <ErrorBanner msg={error} />
+          <Input label="Título *" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Ej: Declarar ISR mensual de Grupo Regio" />
+          <div style={{ marginBottom:16 }}>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Descripción</div>
+            <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={3}
+              style={{ width:"100%", background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"10px 14px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"vertical", boxSizing:"border-box" }} />
+          </div>
+          {/* Asignar a colaborador */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:8, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Asignar a</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {perfiles.map(p=>{
+                const color = colorForUser(p.id);
+                const isSelected = form.assigned_to===p.id;
+                return (
+                  <button key={p.id} onClick={()=>setForm(prev=>({...prev,assigned_to:p.id}))} style={{
+                    display:"flex", alignItems:"center", gap:8, padding:"7px 14px 7px 8px",
+                    borderRadius:20, border:`1.5px solid ${isSelected?color:C.border}`,
+                    background:isSelected?color+"22":C.panel,
+                    color:isSelected?color:C.muted,
+                    cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
+                  }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color }}>{p.nombre.substring(0,2).toUpperCase()}</div>
+                    {p.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <FieldSelect label="Prioridad" value={form.priority} onChange={e=>setForm(p=>({...p,priority:e.target.value}))}>
+              <option value="alta">Alta 🔴</option>
+              <option value="media">Media 🟡</option>
+              <option value="baja">Baja 🟢</option>
+            </FieldSelect>
+            <Input label="Fecha límite" type="date" value={form.due_date} onChange={e=>setForm(p=>({...p,due_date:e.target.value}))} />
+          </div>
+          <FieldSelect label="Cliente relacionado" value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))}>
+            <option value="">— Sin cliente —</option>
+            {clients.map(c=><option key={c}>{c}</option>)}
+          </FieldSelect>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancelar</Btn>
+            <Btn onClick={save} loading={saving} disabled={!form.title.trim()}>Crear tarea</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── CHAT ───────────────────────────────────────────────────────────────────
+const CHANNELS = [
+  { id:"general", label:"# general", desc:"Canal principal" },
+  { id:"impuestos", label:"# impuestos", desc:"Declaraciones" },
+  { id:"imss-pagos", label:"# imss-pagos", desc:"Trámites IMSS" },
+  { id:"urgente", label:"# urgente", desc:"Asuntos urgentes" },
+];
+
+function ChatModule({ user }) {
+  const [channel, setChannel] = useState("general");
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [setupNeeded, setSetupNeeded] = useState(false);
+  const bottomRef = useRef();
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error:err } = await supabase.from("mensajes").select("*").eq("channel",channel).eq("is_dm",false).order("created_at",{ascending:true}).limit(100);
+    setLoading(false);
+    if (err) { setSetupNeeded(true); return; }
+    setMessages(data||[]);
+  };
+
+  useEffect(()=>{ load(); },[channel]);
+
+  useEffect(()=>{
+    const ch = supabase.channel(`chat-${channel}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"mensajes",filter:`channel=eq.${channel}`}, payload=>{
+        // Solo agrega si no es nuestro propio mensaje (ya lo agregamos localmente)
+        setMessages(prev=>{
+          const exists = prev.find(m=>m.id===payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new];
+        });
+      }).subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[channel]);
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages]);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    const t = text.trim();
+    setText("");
+    // Agregar mensaje localmente de inmediato para respuesta instantánea
+    const tempMsg = {
+      id: `temp-${Date.now()}`,
+      from_user: user.id,
+      from_email: user.email,
+      channel,
+      is_dm: false,
+      text: t,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev=>[...prev, tempMsg]);
+    // Insertar en Supabase (el evento realtime lo reemplazará con el ID real)
+    const { data } = await supabase.from("mensajes").insert([{ from_user:user.id, from_email:user.email, channel, is_dm:false, text:t }]).select().single();
+    if (data) {
+      // Reemplazar el mensaje temporal con el real
+      setMessages(prev=>prev.map(m=>m.id===tempMsg.id ? data : m));
+    }
+  };
+
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const startEdit = (msg) => { setEditingId(msg.id); setEditText(msg.text); };
+  const cancelEdit = () => { setEditingId(null); setEditText(""); };
+
+  const saveEdit = async (id) => {
+    if (!editText.trim()) return;
+    setMessages(prev=>prev.map(m=>m.id===id ? {...m, text:editText.trim(), edited:true} : m));
+    await supabase.from("mensajes").update({ text:editText.trim(), edited:true }).eq("id", id);
+    setEditingId(null); setEditText("");
+  };
+
+  const colorFor = (id) => {
+    const colors = [C.navy, C.navyLight, "#3A5FA0", "#16A34A"];
+    return colors[(id?.charCodeAt(0)||0) % colors.length];
+  };
+
+  if (setupNeeded) return <SetupBanner />;
+
+  return (
+    <div style={{ display:"flex", height:"100vh" }}>
+      <style>{ANIM}</style>
+      {/* Channel list */}
+      <div style={{ width:210, background:C.panel, borderRight:`1px solid ${C.border}`, padding:"20px 12px", flexShrink:0 }}>
+        <div style={{ color:C.muted, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", padding:"0 8px", marginBottom:12 }}>Canales</div>
+        {CHANNELS.map(c=>(
+          <div key={c.id} onClick={()=>setChannel(c.id)} style={{ padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, marginBottom:3, background:channel===c.id?C.navyDim:"transparent", color:channel===c.id?C.navy:C.muted, fontWeight:channel===c.id?700:400, borderLeft:channel===c.id?`3px solid ${C.navy}`:"3px solid transparent", transition:"all 0.15s" }}>
+            {c.label}
+            {channel===c.id && <div style={{ fontSize:10, color:C.muted, marginTop:2, fontWeight:400 }}>{c.desc}</div>}
           </div>
         ))}
-      </Card>
+      </div>
+
+      {/* Main chat */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
+        <div style={{ padding:"16px 24px", borderBottom:`1px solid ${C.border}`, background:C.surface, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ color:C.navy, fontWeight:700, fontSize:16 }}>{CHANNELS.find(c=>c.id===channel)?.label}</div>
+            <div style={{ color:C.green, fontSize:11, display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+              <span style={{ width:6, height:6, borderRadius:"50%", background:C.green, display:"inline-block" }} /> Chat en tiempo real · Supabase
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 24px", background:C.bg }}>
+          {loading ? <Spinner /> : messages.length===0 ? (
+            <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>💬</div>
+              <div style={{ fontSize:14, fontWeight:500 }}>Inicio de {CHANNELS.find(c=>c.id===channel)?.label}</div>
+              <div style={{ fontSize:12, marginTop:4 }}>Sé el primero en escribir</div>
+            </div>
+          ) : messages.map(m=>{
+            const isMe = m.from_user===user.id;
+            const email = m.from_email||"usuario";
+            const initials = email.substring(0,2).toUpperCase();
+            const color = colorFor(m.from_user);
+            const isEditing = editingId===m.id;
+            return (
+              <div key={m.id} style={{ display:"flex", gap:10, padding:"5px 0", flexDirection:isMe?"row-reverse":"row" }}
+                onMouseEnter={e=>{ if(isMe) e.currentTarget.querySelector(".edit-btn")?.style && (e.currentTarget.querySelector(".edit-btn").style.opacity="1"); }}
+                onMouseLeave={e=>{ if(isMe) e.currentTarget.querySelector(".edit-btn")?.style && (e.currentTarget.querySelector(".edit-btn").style.opacity="0"); }}>
+                {!isMe && <div style={{ width:34, height:34, borderRadius:"50%", background:color+"22", border:`2px solid ${color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color, flexShrink:0 }}>{initials}</div>}
+                <div style={{ maxWidth:"68%" }}>
+                  {!isMe && <div style={{ color, fontSize:11, fontWeight:700, marginBottom:3 }}>{email}</div>}
+                  {isEditing ? (
+                    <div style={{ display:"flex", gap:6, alignItems:"flex-end" }}>
+                      <textarea value={editText} onChange={e=>setEditText(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();saveEdit(m.id);} if(e.key==="Escape") cancelEdit(); }}
+                        autoFocus rows={2}
+                        style={{ background:C.panel, border:`2px solid ${C.navy}`, borderRadius:10, padding:"8px 12px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"none", minWidth:200, boxSizing:"border-box" }} />
+                      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                        <button onClick={()=>saveEdit(m.id)} style={{ background:C.navy, border:"none", color:C.white, borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit" }}>✓</button>
+                        <button onClick={cancelEdit} style={{ background:C.panel, border:`1px solid ${C.border}`, color:C.muted, borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ position:"relative" }}>
+                      <div style={{ background:isMe?C.navy:C.surface, border:isMe?"none":`1px solid ${C.border}`, borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px", padding:"10px 14px", color:isMe?C.white:C.text, fontSize:14, lineHeight:1.5, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                        {m.text}
+                      </div>
+                      {isMe && (
+                        <button className="edit-btn" onClick={()=>startEdit(m)}
+                          style={{ position:"absolute", top:-6, left:-30, opacity:0, transition:"opacity 0.15s", background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:"pointer", fontSize:11, color:C.muted }}>✏️</button>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ color:C.muted, fontSize:10, marginTop:3, textAlign:isMe?"right":"left" }}>
+                    {new Date(m.created_at).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}
+                    {m.edited && <span style={{ marginLeft:4, fontStyle:"italic" }}>(editado)</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+
+        <div style={{ padding:"14px 24px", borderTop:`1px solid ${C.border}`, background:C.surface }}>
+          <div style={{ display:"flex", gap:10 }}>
+            <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),send())}
+              placeholder={`Mensaje en ${CHANNELS.find(c=>c.id===channel)?.label}…`}
+              style={{ flex:1, background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"11px 16px", color:C.text, fontSize:14, outline:`2px solid ${C.navy}`, outlineOffset:"-1px", fontFamily:"inherit", transition:"border-color 0.15s" }}
+              />
+            <Btn onClick={send} disabled={!text.trim()} style={{ padding:"11px 20px", flexShrink:0 }}>Enviar ↑</Btn>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -819,6 +1457,7 @@ function ExpedienteCliente({ client, onBack, user }) {
 
 // ── CLIENTES ───────────────────────────────────────────────────────────────
 function ClientesModule({ onNavigate, user }) {
+  const [taxes, setTaxes] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -847,12 +1486,14 @@ function ClientesModule({ onNavigate, user }) {
 
   const load = async () => {
     setLoading(true);
-    const [c, k, cd] = await Promise.all([
+    const [c, t, k, cd] = await Promise.all([
       supabase.from("clientes").select("*").order("name"),
+      supabase.from("impuestos").select("*"),
       supabase.from("tareas").select("*"),
       supabase.from("cliente_datos").select("*"),
     ]);
     setClients(c.data || []);
+    setTaxes(t.data || []);
     setTasks(k.data || []);
     const map = {};
     (cd.data || []).forEach(d => { map[d.cliente_id] = d; });
@@ -968,7 +1609,9 @@ function ClientesModule({ onNavigate, user }) {
                   <tbody>
                     {lista.map(client=>{
                       const d = clientDatosMap[client.id] || {};
+                      const ctaxes = taxes.filter(t=>t.client===client.name);
                       const ctasks = tasks.filter(t=>t.client===client.name);
+                      const pending = ctaxes.filter(t=>t.status==="pendiente").length;
                       const regPatronal = getRegPatronal(d);
                       const cellStyle = { padding:"12px 14px", color:C.muted, fontSize:11.5, whiteSpace:"nowrap" };
                       return (
@@ -985,6 +1628,7 @@ function ClientesModule({ onNavigate, user }) {
                           <td style={cellStyle}>{(d.infonavit_portal_user || d.infonavit_portal_pass) ? `${d.infonavit_portal_user||"—"} / ${d.infonavit_portal_pass||"—"}` : "—"}</td>
                           <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
                             <span onClick={()=>onNavigate("tareas", client.name, null)} style={{ cursor:"pointer", color:ctasks.length>0?C.accent:C.muted, fontWeight:700, fontSize:13 }}>{ctasks.length}</span>
+                            {pending>0 && <span style={{ color:C.yellow, fontSize:10, marginLeft:6 }}>({pending} pend.)</span>}
                           </td>
                           <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
                             <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:15, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
@@ -2410,6 +3054,173 @@ function CalculosModule() {
         </div>
       </div>
       {COMPONENTES[seccion]}
+    </div>
+  );
+}
+
+// ── ASISTENTE IA ──────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `Eres el Asistente Contable de COFSA (Consultoría Contable Fiscal y Administrativa), un despacho contable mexicano. Tu nombre es "Asistente COFSA".
+
+Eres un experto en:
+- Contabilidad general y fiscal en México
+- SAT: declaraciones, CFDI, RFC, regímenes fiscales, ISR, IVA, IEPS
+- IMSS: cuotas patronales, SUA, afiliaciones, incapacidades, INFONAVIT
+- Nómina: cálculo de salarios, IMSS, ISR, PTU, liquidaciones
+- Personas Físicas y Morales: obligaciones fiscales, deducciones, constancias
+- Declaraciones: mensuales, anuales, informativas, DIOT, complementarias
+- Impuestos locales y federales de México
+- Trámites SAT: e.firma, FIEL, contraseña, buzón tributario
+- Leyes: CFF, LISR, LIVA, LIMSS, LFT
+- Auditorías, revisiones y opiniones de cumplimiento
+
+Responde siempre en español, de forma clara, práctica y profesional. Cuando sea relevante, cita artículos de ley o fundamentos legales. Si el usuario menciona un cliente o situación específica, ayúdale a resolverla paso a paso. Si no sabes algo con certeza, dilo claramente y recomienda consultar la fuente oficial (SAT, IMSS, DOF).`;
+
+function AsistenteModule({ user }) {
+  const [messages, setMessages] = useState([
+    { role:"assistant", content:"¡Hola! Soy el **Asistente COFSA**, tu experto en contabilidad, fiscal, SAT, IMSS e impuestos de México. ¿En qué te puedo ayudar hoy?" }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef();
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role:"user", content:input.trim() };
+    setMessages(prev=>[...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://gkihfrtayaknarigdzwk.supabase.co/functions/v1/chat-ia", {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${SUPABASE_KEY}`,
+          "apikey": SUPABASE_KEY,
+        },
+        body: JSON.stringify({
+          system: SYSTEM_PROMPT,
+          messages: [...messages, userMsg].filter(m=>m.role==="user"||m.role==="assistant").map(m=>({role:m.role, content:m.content})),
+        })
+      });
+      const data = await response.json();
+      const text = data.content?.map(b=>b.text||"").join("") || "No pude obtener una respuesta. Intenta de nuevo.";
+      setMessages(prev=>[...prev, { role:"assistant", content:text }]);
+    } catch(e) {
+      setMessages(prev=>[...prev, { role:"assistant", content:"Error de conexión. Verifica tu internet e intenta de nuevo." }]);
+    }
+    setLoading(false);
+  };
+
+  const formatText = (text) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^- (.+)/gm, '• $1')
+      .replace(/\n/g, '<br/>');
+  };
+
+  const SUGERENCIAS = [
+    "¿Cuándo vence la declaración mensual de ISR?",
+    "¿Cómo calculo las cuotas del IMSS?",
+    "¿Qué documentos necesito para sacar la e.firma?",
+    "¿Cuál es la diferencia entre régimen simplificado y general?",
+    "¿Cómo presento una declaración complementaria?",
+    "¿Qué es la DIOT y cuándo se presenta?",
+  ];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:C.bg }}>
+      <style>{ANIM}</style>
+
+      {/* Header */}
+      <div style={{ padding:"18px 28px", background:C.surface, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:14 }}>
+        <div style={{ width:44, height:44, borderRadius:12, background:C.navy, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:`0 4px 12px ${C.navy}44` }}>🤖</div>
+        <div>
+          <div style={{ color:C.navy, fontWeight:800, fontSize:16 }}>Asistente COFSA</div>
+          <div style={{ color:C.green, fontSize:11, display:"flex", alignItems:"center", gap:4, marginTop:1 }}>
+            <span style={{ width:6, height:6, borderRadius:"50%", background:C.green, display:"inline-block" }} />
+            Especialista en fiscal, SAT, IMSS e impuestos México · Powered by Claude
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:"auto", padding:"24px 28px" }}>
+
+        {/* Sugerencias iniciales */}
+        {messages.length === 1 && (
+          <div style={{ marginBottom:24, animation:"fadeUp 0.4s ease" }}>
+            <div style={{ color:C.muted, fontSize:12, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 }}>Preguntas frecuentes</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:8 }}>
+              {SUGERENCIAS.map((s,i)=>(
+                <button key={i} onClick={()=>{ setInput(s); }} style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"10px 14px", color:C.text, fontSize:13, cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"all 0.15s" }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.navy;e.currentTarget.style.background=C.navyDim;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surface;}}>
+                  💡 {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m,i)=>{
+          const isUser = m.role==="user";
+          return (
+            <div key={i} style={{ display:"flex", gap:12, marginBottom:20, flexDirection:isUser?"row-reverse":"row", animation:"fadeUp 0.25s ease" }}>
+              <div style={{ width:36, height:36, borderRadius:"50%", background:isUser?C.navy:C.navyDim, border:`2px solid ${isUser?C.navy:C.navyLight}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+                {isUser?"👤":"🤖"}
+              </div>
+              <div style={{ maxWidth:"75%" }}>
+                <div style={{ fontSize:11, color:C.muted, fontWeight:600, marginBottom:4, textAlign:isUser?"right":"left" }}>
+                  {isUser ? (user.email?.split("@")[0] || "Tú") : "Asistente COFSA"}
+                </div>
+                <div style={{
+                  background:isUser?C.navy:C.surface,
+                  border:isUser?"none":`1px solid ${C.border}`,
+                  borderRadius:isUser?"14px 14px 4px 14px":"14px 14px 14px 4px",
+                  padding:"12px 16px",
+                  color:isUser?C.white:C.text,
+                  fontSize:14, lineHeight:1.7,
+                  boxShadow:"0 2px 8px rgba(0,0,0,0.06)",
+                }} dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
+              </div>
+            </div>
+          );
+        })}
+
+        {loading && (
+          <div style={{ display:"flex", gap:12, marginBottom:20, animation:"fadeUp 0.2s ease" }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+            <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:"14px 14px 14px 4px", padding:"14px 18px", display:"flex", gap:6, alignItems:"center" }}>
+              {[0,1,2].map(i=><div key={i} style={{ width:7, height:7, borderRadius:"50%", background:C.navy, opacity:0.4, animation:"pulse 1.2s ease infinite", animationDelay:`${i*0.2}s` }} />)}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ padding:"16px 28px", background:C.surface, borderTop:`1px solid ${C.border}` }}>
+        <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
+          <textarea
+            value={input} onChange={e=>setInput(e.target.value)} rows={2}
+            onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }}
+            placeholder="Escribe tu consulta fiscal, contable o de impuestos… (Enter para enviar, Shift+Enter para nueva línea)"
+            style={{ flex:1, background:C.panel, border:`1.5px solid ${C.border}`, borderRadius:12, padding:"12px 16px", color:C.text, fontSize:14, outline:"none", fontFamily:"inherit", resize:"none", lineHeight:1.5, boxSizing:"border-box" }}
+            onFocus={e=>e.target.style.borderColor=C.navy}
+            onBlur={e=>e.target.style.borderColor=C.border}
+          />
+          <Btn onClick={send} disabled={!input.trim()||loading} style={{ padding:"12px 20px", flexShrink:0, height:"fit-content" }}>
+            {loading ? "..." : "Enviar ↑"}
+          </Btn>
+        </div>
+        <div style={{ color:C.muted, fontSize:11, marginTop:8, textAlign:"center" }}>
+          Asistente especializado en legislación fiscal y contable de México 🇲🇽
+        </div>
+      </div>
     </div>
   );
 }
@@ -4778,6 +5589,7 @@ export default function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
   const [clientFilter, setClientFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [taxes, setTaxes] = useState([]);
   const [tasks, setTasks] = useState([]);
 
   useEffect(()=>{
@@ -4788,6 +5600,7 @@ export default function App() {
 
   useEffect(()=>{
     if (!user) return;
+    supabase.from("impuestos").select("*").then(({data})=>setTaxes(data||[]));
     supabase.from("tareas").select("*").then(({data})=>setTasks(data||[]));
     ejecutarAutomatizacionMensual().catch(e=>console.error("Error en automatización:", e));
   },[user]);
@@ -4820,8 +5633,10 @@ export default function App() {
   const pendingTaskCount = tasks.filter(t=>t.status!=="done").length;
 
   const modules = {
-    dashboard: <Dashboard tasks={tasks} />,
+    dashboard: <Dashboard taxes={taxes} tasks={tasks} user={user} />,
+    impuestos: <ImpuestosModule user={user} initialClient={clientFilter} initialStatus={statusFilter} />,
     tareas: <TareasModule user={user} initialClient={clientFilter} />,
+    chat: <ChatModule user={user} />,
     clientes: <ClientesModule onNavigate={handleNavigate} user={user} />,
     nomina: <CalculosModule />,
     ordenes: <OrdenesTrabajoModule user={user} />,
@@ -4829,6 +5644,7 @@ export default function App() {
     seguimiento: <SeguimientoModule />,
     reporte: <ReporteMensualModule />,
     cotizaciones: <CotizacionesModule user={user} />,
+    asistente: <AsistenteModule user={user} />,
     fynco_dashboard: <FyncoDashboard />,
     fynco_clientes: <FyncoClientesModule user={user} />,
     fynco_gastos: <FyncoGastosModule user={user} />,
@@ -4839,7 +5655,7 @@ export default function App() {
     <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden", fontFamily:"'Montserrat', sans-serif" }}>
       <style>{ANIM}</style>
       <Sidebar active={activeModule} onNav={handleNav} user={user} onLogout={()=>supabase.auth.signOut()} notifCount={pendingTaskCount} empresa={empresa} setEmpresa={setEmpresa} />
-      <main style={{ flex:1, overflowY:"auto" }}>
+      <main style={{ flex:1, overflowY:(activeModule==="chat"||activeModule==="asistente")?"hidden":"auto" }}>
         {modules[activeModule]}
       </main>
     </div>
