@@ -152,13 +152,13 @@ function Btn({ children, onClick, variant="primary", style:sx={}, disabled, load
 
 function ErrorBanner({ msg }) {
   if (!msg) return null;
-  return <div style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:9, padding:"10px 14px", color:C.red, fontSize:13, marginBottom:16 }}>⚠️ {msg}</div>;
+  return <div style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:9, padding:"10px 14px", color:C.red, fontSize:13, marginBottom:16 }}>{msg}</div>;
 }
 
 function SetupBanner() {
   return (
     <div style={{ margin:28, background:C.yellowBg, border:`1px solid ${C.yellow}44`, borderRadius:14, padding:24 }}>
-      <div style={{ fontWeight:700, fontSize:15, color:C.yellow, marginBottom:10 }}>⚙️ Ejecuta el SQL en Supabase → SQL Editor</div>
+      <div style={{ fontWeight:700, fontSize:15, color:C.yellow, marginBottom:10 }}>Ejecuta el SQL en Supabase → SQL Editor</div>
       <pre style={{ background:C.navy, borderRadius:10, padding:16, color:"#93C5FD", fontSize:12, lineHeight:1.8, overflowX:"auto" }}>{
 `create table if not exists clientes (
   id uuid default gen_random_uuid() primary key,
@@ -249,20 +249,20 @@ function LoginScreen({ onLogin }) {
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────
 const NAV_COFSA = [
-  { id:"dashboard", icon:"⊞", label:"Dashboard" },
-  { id:"ordenes", icon:"🛠️", label:"Órdenes de Trabajo" },
-  { id:"cedulas", icon:"📊", label:"Cédulas de Impuestos" },
-  { id:"seguimiento", icon:"📈", label:"Seguimiento" },
-  { id:"reporte", icon:"📊", label:"Reporte Mensual" },
-  { id:"tareas", icon:"✓", label:"Tareas" },
-  { id:"clientes", icon:"👥", label:"Clientes" },
-  { id:"nomina", icon:"🧮", label:"Cálculos" },
+  { id:"dashboard", label:"Dashboard" },
+  { id:"ordenes", label:"Órdenes de Trabajo" },
+  { id:"cedulas", label:"Cédulas de Impuestos" },
+  { id:"seguimiento", label:"Seguimiento" },
+  { id:"reporte", label:"Reporte Mensual" },
+  { id:"tareas", label:"Tareas" },
+  { id:"clientes", label:"Clientes" },
+  { id:"nomina", label:"Cálculos" },
 ];
 const NAV_FYNCO = [
-  { id:"fynco_dashboard", icon:"⊞", label:"Dashboard" },
-  { id:"fynco_clientes", icon:"👥", label:"Clientes" },
-  { id:"fynco_gastos", icon:"💸", label:"Gastos" },
-  { id:"fynco_cotizaciones", icon:"📝", label:"Cotización" },
+  { id:"fynco_dashboard", label:"Dashboard" },
+  { id:"fynco_clientes", label:"Clientes" },
+  { id:"fynco_gastos", label:"Gastos" },
+  { id:"fynco_cotizaciones", label:"Cotización" },
 ];
 const NAV = NAV_COFSA; // compatibilidad
 
@@ -305,7 +305,7 @@ function Sidebar({ active, onNav, user, onLogout, notifCount, empresa, setEmpres
                   {e.logo ? <img src={e.logo} alt={e.nombre} style={{ width:18, height:18, objectFit:"contain" }} /> : <span style={{ color:C.white, fontWeight:800, fontSize:11 }}>F</span>}
                 </div>
                 <span style={{ color:C.white, fontSize:13, fontWeight:600 }}>{e.nombre}</span>
-                {empresa===e.id && <span style={{ marginLeft:"auto", color:"#4ADE80", fontSize:13 }}>✓</span>}
+                {empresa===e.id && <span style={{ marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:"#4ADE80" }} />}
               </div>
             ))}
           </div>
@@ -315,16 +315,15 @@ function Sidebar({ active, onNav, user, onLogout, notifCount, empresa, setEmpres
       {/* Nav */}
       <nav style={{ flex:1, padding:"16px 12px" }}>
         <div style={{ color:"rgba(255,255,255,0.3)", fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", padding:"0 8px", marginBottom:10 }}>Módulos</div>
-        {[...navItems, ...(showCotizaciones?[{id:"cotizaciones",icon:"📝",label:"Cotizaciones"}]:[])].map(n => (
+        {[...navItems, ...(showCotizaciones?[{id:"cotizaciones",label:"Cotizaciones"}]:[])].map(n => (
           <div key={n.id} className="nav-item" onClick={()=>onNav(n.id)} style={{
-            display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
+            display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
             borderRadius:10, cursor:"pointer", marginBottom:3,
             background: active===n.id ? "rgba(255,255,255,0.12)" : "transparent",
             color: active===n.id ? C.white : "rgba(255,255,255,0.55)",
             fontWeight: active===n.id ? 600 : 400, fontSize:14,
             borderLeft: active===n.id ? `3px solid rgba(255,255,255,0.7)` : "3px solid transparent",
           }}>
-            <span style={{ fontSize:15, width:20, textAlign:"center" }}>{n.icon}</span>
             {n.label}
             {n.id==="tareas" && notifCount>0 && (
               <span style={{ marginLeft:"auto", background:C.red, color:C.white, borderRadius:10, fontSize:10, fontWeight:700, padding:"2px 7px" }}>{notifCount}</span>
@@ -358,10 +357,10 @@ function Dashboard({ taxes, tasks }) {
   const overdue = activeTasks.filter(t=>t.due_date && new Date(t.due_date)<new Date());
 
   const cards = [
-    { label:"Impuestos pendientes", value:pending.length, icon:"📋", color:C.yellow, bg:C.yellowBg, border:C.yellow },
-    { label:"Impuestos presentados", value:presented.length, icon:"✅", color:C.green, bg:C.greenBg, border:C.green },
-    { label:"Tareas activas", value:activeTasks.length, icon:"✓", color:C.accent, bg:C.navyDim, border:C.accent },
-    { label:"Tareas vencidas", value:overdue.length, icon:"⚠️", color:C.red, bg:C.redBg, border:C.red },
+    { label:"Impuestos pendientes", value:pending.length, color:C.yellow, bg:C.yellowBg, border:C.yellow },
+    { label:"Impuestos presentados", value:presented.length, color:C.green, bg:C.greenBg, border:C.green },
+    { label:"Tareas activas", value:activeTasks.length, color:C.accent, bg:C.navyDim, border:C.accent },
+    { label:"Tareas vencidas", value:overdue.length, color:C.red, bg:C.redBg, border:C.red },
   ];
 
   return (
@@ -374,21 +373,19 @@ function Dashboard({ taxes, tasks }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:16, marginBottom:28 }}>
         {cards.map((c,i) => (
-          <div key={c.label} className="card" style={{ background:c.bg, border:`1.5px solid ${c.border}33`, borderRadius:14, padding:22, position:"relative", overflow:"hidden" }}>
-            <div style={{ position:"absolute", top:-10, right:-10, fontSize:48, opacity:0.08 }}>{c.icon}</div>
-            <div style={{ fontSize:20, marginBottom:10 }}>{c.icon}</div>
-            <div style={{ color:c.color, fontSize:34, fontWeight:800, lineHeight:1, fontFamily:"'Montserrat', sans-serif" }}>{c.value}</div>
-            <div style={{ color:c.color, fontSize:12, marginTop:6, fontWeight:500, opacity:0.8 }}>{c.label}</div>
+          <div key={c.label} className="card" style={{ background:c.bg, borderTop:`3px solid ${c.border}`, borderRadius:10, padding:"20px 22px" }}>
+            <div style={{ color:c.color, fontSize:32, fontWeight:800, lineHeight:1, fontFamily:"'Montserrat', sans-serif" }}>{c.value}</div>
+            <div style={{ color:c.color, fontSize:12, marginTop:8, fontWeight:500, opacity:0.85 }}>{c.label}</div>
           </div>
         ))}
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
         <Card>
-          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.yellowBg, padding:"4px 8px", borderRadius:7, fontSize:13 }}>📋</span> Impuestos pendientes
+          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16 }}>
+            Impuestos pendientes
           </div>
-          {pending.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin pendientes — todo al día 🎉</div>}
+          {pending.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin pendientes — todo al día</div>}
           {pending.slice(0,5).map((t,i)=>(
             <div key={t.id} className="row-hover" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<4?`1px solid ${C.border}`:"none" }}>
               <div>
@@ -401,10 +398,10 @@ function Dashboard({ taxes, tasks }) {
         </Card>
 
         <Card>
-          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7, fontSize:13 }}>✓</span> Tareas pendientes
+          <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:16 }}>
+            Tareas pendientes
           </div>
-          {activeTasks.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin tareas pendientes 🎉</div>}
+          {activeTasks.length===0 && <div style={{ color:C.muted, fontSize:13, padding:"12px 0" }}>Sin tareas pendientes</div>}
           {activeTasks.slice(0,5).map((t,i)=>(
             <div key={t.id} className="row-hover" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<4?`1px solid ${C.border}`:"none" }}>
               <div>
@@ -592,7 +589,7 @@ function TareasModule({ user, initialClient = "" }) {
     if (err) { setError(err.message); return; }
     setShowAdd(false);
     setForm({ title:"", description:"", priority:"media", due_date:"", client:"", assigned_to:user.id });
-    setNotif("✅ Tarea creada y asignada correctamente");
+    setNotif("Tarea creada y asignada correctamente");
     setTimeout(()=>setNotif(null), 3500);
     load();
   };
@@ -685,11 +682,11 @@ function TareasModule({ user, initialClient = "" }) {
           <div title={perfil?.nombre||"Sin asignar"} style={{ width:26, height:26, borderRadius:"50%", background:color+"22", border:`2px solid ${color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, color, flexShrink:0, marginLeft:8 }}>{initials}</div>
         </div>
         {task.description && <div style={{ color:C.muted, fontSize:12, marginBottom:8, lineHeight:1.5 }}>{task.description}</div>}
-        {task.client && <div style={{ color:C.muted, fontSize:11, marginBottom:8 }}>👥 {task.client}</div>}
-        {perfil && <div style={{ color, fontSize:11, marginBottom:8, fontWeight:600 }}>👤 {perfil.nombre}</div>}
+        {task.client && <div style={{ color:C.muted, fontSize:11, marginBottom:8 }}>{task.client}</div>}
+        {perfil && <div style={{ color, fontSize:11, marginBottom:8, fontWeight:600 }}>{perfil.nombre}</div>}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <PriorityBadge priority={task.priority} />
-          {task.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, fontWeight:isOverdue?600:400 }}>{isOverdue?"⚠️ ":"📅 "}{task.due_date}</span>}
+          {task.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, fontWeight:isOverdue?600:400 }}>{isOverdue?"":""}{task.due_date}</span>}
         </div>
         <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
           {COLS.filter(c=>c.id!==task.status).map(c=>(
@@ -737,7 +734,7 @@ function TareasModule({ user, initialClient = "" }) {
             color:!userFilter?C.white:C.muted,
             cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:12, transition:"all 0.15s",
           }}>
-            <span style={{ fontSize:14 }}>👥</span> Todos ({tasks.length})
+            Todos ({tasks.length})
           </button>
           {/* Avatar por colaborador */}
           {perfiles.map(p=>{
@@ -802,7 +799,7 @@ function TareasModule({ user, initialClient = "" }) {
                 )}
                 <Badge label={col.label} color={col.color} bg={col.bg} />
                 <PriorityBadge priority={t.priority} />
-                {t.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, whiteSpace:"nowrap" }}>{isOverdue?"⚠️ ":""}{t.due_date}</span>}
+                {t.due_date && <span style={{ fontSize:11, color:isOverdue?C.red:C.muted, whiteSpace:"nowrap" }}>{isOverdue?"":""}{t.due_date}</span>}
               </div>
             );
           })}
@@ -842,9 +839,9 @@ function TareasModule({ user, initialClient = "" }) {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             <FieldSelect label="Prioridad" value={form.priority} onChange={e=>setForm(p=>({...p,priority:e.target.value}))}>
-              <option value="alta">Alta 🔴</option>
-              <option value="media">Media 🟡</option>
-              <option value="baja">Baja 🟢</option>
+              <option value="alta">Alta </option>
+              <option value="media">Media </option>
+              <option value="baja">Baja </option>
             </FieldSelect>
             <Input label="Fecha límite" type="date" value={form.due_date} onChange={e=>setForm(p=>({...p,due_date:e.target.value}))} />
           </div>
@@ -974,7 +971,6 @@ function ChatModule({ user }) {
         <div style={{ flex:1, overflowY:"auto", padding:"20px 24px", background:C.bg }}>
           {loading ? <Spinner /> : messages.length===0 ? (
             <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>💬</div>
               <div style={{ fontSize:14, fontWeight:500 }}>Inicio de {CHANNELS.find(c=>c.id===channel)?.label}</div>
               <div style={{ fontSize:12, marginTop:4 }}>Sé el primero en escribir</div>
             </div>
@@ -1009,7 +1005,7 @@ function ChatModule({ user }) {
                       </div>
                       {isMe && (
                         <button className="edit-btn" onClick={()=>startEdit(m)}
-                          style={{ position:"absolute", top:-6, left:-30, opacity:0, transition:"opacity 0.15s", background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:"pointer", fontSize:11, color:C.muted }}>✏️</button>
+                          style={{ position:"absolute", top:-6, left:-30, opacity:0, transition:"opacity 0.15s", background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 7px", cursor:"pointer", fontSize:11, color:C.muted }}></button>
                       )}
                     </div>
                   )}
@@ -1071,7 +1067,7 @@ function ExpedienteCliente({ client, onBack, user }) {
     const d = diasVigencia(fecha);
     if (d === null) return null;
     if (d < 0) return { label:`Vencido hace ${Math.abs(d)} días`, color:C.red, bg:C.redBg };
-    if (d <= 15) return { label:`⚠️ Vence en ${d} días`, color:C.red, bg:C.redBg };
+    if (d <= 15) return { label:`Vence en ${d} días`, color:C.red, bg:C.redBg };
     if (d <= 30) return { label:`${d} días restantes`, color:C.yellow, bg:C.yellowBg };
     return { label:`${d} días restantes`, color:C.green, bg:C.greenBg };
   };
@@ -1180,7 +1176,7 @@ function ExpedienteCliente({ client, onBack, user }) {
   const updateOtro = (i, field, val) => setOtrosAccesos(p=>p.map((o,idx)=>idx===i?{...o,[field]:val}:o));
   const delOtro = (i) => setOtrosAccesos(p=>p.filter((_,idx)=>idx!==i));
 
-  const TABS = [{ id:"datos", label:"📋 Datos & Accesos" },{ id:"documentos", label:"📁 Documentos" }];
+  const TABS = [{ id:"datos", label:"Datos & Accesos" },{ id:"documentos", label:"Documentos" }];
 
   return (
     <div style={{ padding:28, maxWidth:900 }}>
@@ -1188,7 +1184,6 @@ function ExpedienteCliente({ client, onBack, user }) {
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:28, animation:"fadeUp 0.3s ease" }}>
         <button onClick={onBack} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13 }}>← Volver</button>
-        <div style={{ width:46, height:46, borderRadius:12, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏢</div>
         <div>
           <h1 style={{ margin:0, color:C.navy, fontSize:20, fontWeight:800 }}>{client.name}</h1>
           <p style={{ margin:0, color:C.muted, fontSize:13 }}>Expediente del cliente</p>
@@ -1208,7 +1203,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {/* Tipo de persona */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>👤</span> Tipo de persona
+              Tipo de persona
             </div>
             <div style={{ display:"flex", gap:8 }}>
               {[["fisica","Persona Física"],["moral","Persona Moral"]].map(([v,l])=>(
@@ -1224,7 +1219,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {/* Datos base — dinámico según tipo de persona */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>📄</span> Datos {form.tipo_persona==="fisica"?"Personales":"de la Empresa"}
+              Datos {form.tipo_persona==="fisica"?"Personales":"de la Empresa"}
             </div>
             {form.tipo_persona==="fisica" ? (
               <>
@@ -1260,7 +1255,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {/* SAT */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.yellowBg, padding:"5px 9px", borderRadius:8 }}>🔐</span> SAT
+              SAT
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Contraseña FIEL" value={form.sat_fiel_pass} onChange={e=>setForm(p=>({...p,sat_fiel_pass:e.target.value}))} placeholder="Contraseña de la e.firma" />
@@ -1275,7 +1270,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {/* IMSS */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.greenBg, padding:"5px 9px", borderRadius:8 }}>🏥</span> IMSS
+              IMSS
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Usuario IDSE" value={form.imss_idse_user} onChange={e=>setForm(p=>({...p,imss_idse_user:e.target.value}))} placeholder="Usuario IDSE" />
@@ -1291,7 +1286,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {/* INFONAVIT */}
           <Card style={{ marginBottom:16 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🏠</span> INFONAVIT
+              INFONAVIT
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Usuario Portal INFONAVIT" value={form.infonavit_portal_user} onChange={e=>setForm(p=>({...p,infonavit_portal_user:e.target.value}))} placeholder="Usuario" />
@@ -1303,7 +1298,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           {form.tipo_persona==="moral" && (
             <Card style={{ marginBottom:16 }}>
               <div style={{ color:C.navy, fontWeight:700, fontSize:15, marginBottom:18, display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ background:C.redBg, padding:"5px 9px", borderRadius:8 }}>🏛️</span> ESTADO
+                ESTADO
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <Input label="Usuario" value={form.estado_user} onChange={e=>setForm(p=>({...p,estado_user:e.target.value}))} placeholder="Usuario portal estatal" />
@@ -1323,7 +1318,7 @@ function ExpedienteCliente({ client, onBack, user }) {
             if (alertas.length === 0) return null;
             return (
               <Card style={{ marginBottom:16, background:C.redBg, border:`1.5px solid ${C.red}44` }}>
-                <div style={{ color:C.red, fontWeight:700, fontSize:14, marginBottom:10 }}>⚠️ Vencimientos próximos (2 meses o menos)</div>
+                <div style={{ color:C.red, fontWeight:700, fontSize:14, marginBottom:10 }}>Vencimientos próximos (2 meses o menos)</div>
                 {alertas.map(a=>(
                   <div key={a.campo} style={{ color:C.red, fontSize:13, marginBottom:4 }}>
                     • <strong>{a.label}</strong> vence el {a.fecha} ({a.dias < 0 ? `vencido hace ${Math.abs(a.dias)} días` : `${a.dias} días restantes`})
@@ -1338,7 +1333,7 @@ function ExpedienteCliente({ client, onBack, user }) {
           <Card style={{ marginBottom:20 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ color:C.navy, fontWeight:700, fontSize:15, display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ background:C.navyDim, padding:"5px 9px", borderRadius:8 }}>🔗</span> Otros accesos
+                Otros accesos
               </div>
               <Btn variant="ghost" onClick={addOtro} style={{ padding:"6px 14px", fontSize:12 }}>+ Agregar</Btn>
             </div>
@@ -1353,7 +1348,7 @@ function ExpedienteCliente({ client, onBack, user }) {
             ))}
           </Card>
 
-          <Btn onClick={saveDatos} loading={saving} style={{ width:"100%", padding:14, fontSize:15 }}>💾 Guardar datos del cliente</Btn>
+          <Btn onClick={saveDatos} loading={saving} style={{ width:"100%", padding:14, fontSize:15 }}>Guardar datos del cliente</Btn>
         </div>
       )}
 
@@ -1367,7 +1362,6 @@ function ExpedienteCliente({ client, onBack, user }) {
 
           {docs.length===0 ? (
             <Card style={{ textAlign:"center", padding:48 }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>📁</div>
               <div style={{ color:C.muted, fontSize:14 }}>Sin documentos — sube el primero ↗</div>
             </Card>
           ) : (
@@ -1379,12 +1373,12 @@ function ExpedienteCliente({ client, onBack, user }) {
                   <Card key={doc.id} style={{ padding:18 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                       <div style={{ width:44, height:44, borderRadius:10, background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
-                        {doc.file_name?.endsWith(".cer")?"🔑":doc.file_name?.endsWith(".key")?"🗝️":doc.file_name?.endsWith(".pdf")?"📕":doc.file_name?.endsWith(".txt")?"📝":doc.file_name?.endsWith(".req")?"📋":"📄"}
+                        {doc.file_name?.endsWith(".cer")?"":doc.file_name?.endsWith(".key")?"":doc.file_name?.endsWith(".pdf")?"":doc.file_name?.endsWith(".txt")?"":doc.file_name?.endsWith(".req")?"":""}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{doc.file_name || doc.nombre}</div>
                         {doc.file_name && doc.nombre && (
-                          <div style={{ color:C.muted, fontSize:12, marginTop:3, fontWeight:500 }}>📌 {doc.nombre}</div>
+                          <div style={{ color:C.muted, fontSize:12, marginTop:3, fontWeight:500 }}>{doc.nombre}</div>
                         )}
                         {doc.notas && <div style={{ color:C.muted, fontSize:11, marginTop:2, fontStyle:"italic" }}>{doc.notas}</div>}
                       </div>
@@ -1397,10 +1391,10 @@ function ExpedienteCliente({ client, onBack, user }) {
                         {doc.file_url && (
                           <a href={doc.file_url} download={doc.file_name || doc.nombre}
                             style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:8, padding:"8px 12px", fontSize:12, fontWeight:600, textDecoration:"none", cursor:"pointer", display:"inline-block" }}>
-                            ⬇️ Descargar
+                            Descargar
                           </a>
                         )}
-                        <button onClick={()=>delDoc(doc.id, doc.file_url)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"8px 12px", fontFamily:"inherit", fontSize:12 }}>🗑️</button>
+                        <button onClick={()=>delDoc(doc.id, doc.file_url)} style={{ background:C.redBg, border:`1px solid ${C.red}33`, borderRadius:8, color:C.red, cursor:"pointer", padding:"8px 12px", fontFamily:"inherit", fontSize:12 }}></button>
                       </div>
                     </div>
                     {/* Barra de vigencia */}
@@ -1426,11 +1420,11 @@ function ExpedienteCliente({ client, onBack, user }) {
                 <div style={{ color:C.muted, fontSize:11, marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Archivos (PDF, .cer, .key, imágenes, carpetas…)</div>
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                   <label style={{ flex:1, background:C.panel, border:`1.5px dashed ${C.border}`, borderRadius:9, padding:"12px 14px", color:C.muted, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box", textAlign:"center", display:"block" }}>
-                    📄 Seleccionar archivos
+                    Seleccionar archivos
                     <input type="file" multiple onChange={e=>setDocForm(p=>({...p,files:Array.from(e.target.files)}))} style={{ display:"none" }} />
                   </label>
                   <label style={{ flex:1, background:C.navyDim, border:`1.5px dashed ${C.navy}44`, borderRadius:9, padding:"12px 14px", color:C.navy, fontSize:13, fontFamily:"inherit", cursor:"pointer", boxSizing:"border-box", textAlign:"center", display:"block" }}>
-                    📁 Seleccionar carpeta
+                    Seleccionar carpeta
                     <input type="file" webkitdirectory="true" multiple onChange={e=>setDocForm(p=>({...p,files:Array.from(e.target.files)}))} style={{ display:"none" }} />
                   </label>
                 </div>
@@ -1572,7 +1566,6 @@ function ClientesModule({ onNavigate, user }) {
 
       {loading ? <Spinner /> : clients.length === 0 ? (
         <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>🏢</div>
           <div style={{ fontSize:14, fontWeight:500 }}>No hay clientes aún</div>
           <div style={{ fontSize:12, marginTop:4 }}>Haz clic en "+ Agregar cliente" para comenzar</div>
         </div>
@@ -1631,7 +1624,7 @@ function ClientesModule({ onNavigate, user }) {
                             {pending>0 && <span style={{ color:C.yellow, fontSize:10, marginLeft:6 }}>({pending} pend.)</span>}
                           </td>
                           <td style={{ padding:"12px 14px", whiteSpace:"nowrap" }}>
-                            <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:15, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente">🗑️</button>
+                            <button onClick={()=>setConfirmDel(client)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:15, padding:4, borderRadius:6, lineHeight:1 }} title="Eliminar cliente"></button>
                           </td>
                         </tr>
                       );
@@ -1646,8 +1639,8 @@ function ClientesModule({ onNavigate, user }) {
 
         return (
           <div>
-            <TablaClientes titulo="Personas Morales" icono="🏢" lista={morales} color={C.navy} bg={C.navyDim} />
-            <TablaClientes titulo="Personas Físicas" icono="👤" lista={fisicas} color={C.accent} bg={C.navyDim} />
+            <TablaClientes titulo="Personas Morales" icono="" lista={morales} color={C.navy} bg={C.navyDim} />
+            <TablaClientes titulo="Personas Físicas" icono="" lista={fisicas} color={C.accent} bg={C.navyDim} />
           </div>
         );
       })()}
@@ -1657,7 +1650,7 @@ function ClientesModule({ onNavigate, user }) {
           {/* Tipo de persona */}
           <div style={{ marginBottom:18 }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>👤</span> Tipo de persona
+              Tipo de persona
             </div>
             <div style={{ display:"flex", gap:8 }}>
               {[["fisica","Persona Física"],["moral","Persona Moral"]].map(([v,l])=>(
@@ -1672,7 +1665,7 @@ function ClientesModule({ onNavigate, user }) {
 
           {/* Datos base */}
           <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>📄</span> Datos {newForm.tipo_persona==="fisica"?"Personales":"de la Empresa"}
+            Datos {newForm.tipo_persona==="fisica"?"Personales":"de la Empresa"}
           </div>
           {newForm.tipo_persona==="fisica" ? (
             <>
@@ -1706,7 +1699,7 @@ function ClientesModule({ onNavigate, user }) {
 
           {/* SAT */}
           <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.yellowBg, padding:"4px 8px", borderRadius:7 }}>🔐</span> SAT
+            SAT
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             <Input label="Contraseña FIEL" value={newForm.sat_fiel_pass} onChange={e=>setNewForm(p=>({...p,sat_fiel_pass:e.target.value}))} placeholder="Contraseña de la e.firma" />
@@ -1719,7 +1712,7 @@ function ClientesModule({ onNavigate, user }) {
 
           {/* IMSS */}
           <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.greenBg, padding:"4px 8px", borderRadius:7 }}>🏥</span> IMSS
+            IMSS
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             <Input label="Usuario IDSE" value={newForm.imss_idse_user} onChange={e=>setNewForm(p=>({...p,imss_idse_user:e.target.value}))} placeholder="Usuario IDSE" />
@@ -1733,7 +1726,7 @@ function ClientesModule({ onNavigate, user }) {
 
           {/* INFONAVIT */}
           <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>🏠</span> INFONAVIT
+            INFONAVIT
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             <Input label="Usuario Portal INFONAVIT" value={newForm.infonavit_portal_user} onChange={e=>setNewForm(p=>({...p,infonavit_portal_user:e.target.value}))} placeholder="Usuario" />
@@ -1744,7 +1737,7 @@ function ClientesModule({ onNavigate, user }) {
           {newForm.tipo_persona==="moral" && (
             <>
               <div style={{ color:C.navy, fontWeight:700, fontSize:14, margin:"18px 0 10px", display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ background:C.redBg, padding:"4px 8px", borderRadius:7 }}>🏛️</span> ESTADO
+                ESTADO
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <Input label="Usuario" value={newForm.estado_user} onChange={e=>setNewForm(p=>({...p,estado_user:e.target.value}))} placeholder="Usuario portal estatal" />
@@ -1756,7 +1749,7 @@ function ClientesModule({ onNavigate, user }) {
           {/* Otros accesos */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"18px 0 10px" }}>
             <div style={{ color:C.navy, fontWeight:700, fontSize:14, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ background:C.navyDim, padding:"4px 8px", borderRadius:7 }}>🔗</span> Otros accesos
+              Otros accesos
             </div>
             <Btn variant="ghost" onClick={()=>setOtrosAccesosNew(p=>[...p,{sistema:"",usuario:"",password:""}])} style={{ padding:"5px 12px", fontSize:12 }}>+ Agregar</Btn>
           </div>
@@ -2246,7 +2239,7 @@ function NominaModule() {
               border:"none", borderRadius:10, padding:"10px 22px", cursor:generandoPDF?"not-allowed":"pointer",
               fontFamily:"inherit", fontWeight:700, fontSize:14, opacity:generandoPDF?0.7:1, transition:"all 0.15s",
             }}>
-              {generandoPDF ? "⏳ Generando..." : "⬇️ Descargar PDF"}
+              {generandoPDF ? "Generando..." : "Descargar PDF"}
             </button>
           </div>
 
@@ -2267,7 +2260,7 @@ function NominaModule() {
           {/* Tabla detallada */}
           <Card style={{ padding:0, overflow:"hidden", marginBottom:20 }}>
             <div style={{ padding:"14px 16px", background:C.navy, color:C.white, fontWeight:700, fontSize:14 }}>
-              📊 Desglose completo
+              Desglose completo
             </div>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
@@ -2314,7 +2307,7 @@ function NominaModule() {
                 <Row label="Subsidio al empleo" obrero={-resultado.subsidio} />
                 <Row label="ISR neto a retener" obrero={resultado.isr_neto} highlight />
                 <tr style={{ background:C.greenBg }}>
-                  <td style={{ padding:"12px 12px", color:C.green, fontWeight:800, fontSize:14 }}>💰 NETO AL TRABAJADOR</td>
+                  <td style={{ padding:"12px 12px", color:C.green, fontWeight:800, fontSize:14 }}>NETO AL TRABAJADOR</td>
                   <td colSpan={2} style={{ padding:"12px 12px", color:C.green, fontWeight:800, fontSize:18, textAlign:"right" }}>${fmt(resultado.neto_trabajador)}</td>
                 </tr>
               </tbody>
@@ -2470,7 +2463,7 @@ function BotonesCalc({ onCalc, onPDF, genPDF, resultado }) {
   return (
     <div style={{display:"flex",gap:10,marginBottom:20}}>
       <Btn onClick={onCalc}>Calcular ▶</Btn>
-      {resultado && <Btn variant="ghost" onClick={onPDF} loading={genPDF}>⬇️ Descargar PDF</Btn>}
+      {resultado && <Btn variant="ghost" onClick={onPDF} loading={genPDF}>Descargar PDF</Btn>}
     </div>
   );
 }
@@ -2551,7 +2544,7 @@ function CalcVacaciones() {
       {sd && tipoSal!=="diario" && <div style={{background:C.navyDim,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.muted,marginBottom:12}}>Salario diario equivalente: <strong style={{color:C.navy}}>${(toDaily(parseFloat(sd)||0)).toFixed(2)}</strong></div>}
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
-        {r.en_aniversario && <div style={{background:C.greenBg,border:`1px solid ${C.green}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.green,fontWeight:600,marginBottom:12}}>✅ Fecha de aniversario exacta — se pagan los {r.vac_prop} días del año recién cumplido completos.</div>}
+        {r.en_aniversario && <div style={{background:C.greenBg,border:`1px solid ${C.green}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.green,fontWeight:600,marginBottom:12}}>Fecha de aniversario exacta — se pagan los {r.vac_prop} días del año recién cumplido completos.</div>}
         <TarjetasResumen items={[
           {l:"Antigüedad",v:`${r.anios} años`,c:C.navy,bg:C.navyDim},
           {l:r.en_aniversario?"Días vacaciones (año cumplido)":"Días vacaciones (año completo)",v:`${r.dias_vac} días`,c:C.accent,bg:C.navyDim},
@@ -2984,7 +2977,7 @@ function CalcPrimaAntiguedad() {
       </div>
       <BotonesCalc onCalc={calcular} onPDF={descargar} genPDF={gen} resultado={r}/>
       {r && (<>
-        {r.excede && <div style={{background:C.yellowBg,border:`1px solid ${C.yellow}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.yellow,fontWeight:600,marginBottom:12}}>⚠️ Salario (${fmt(r.salDiario)}) supera 2 UMAs (${fmt(r.tope)}). Se aplica el tope.</div>}
+        {r.excede && <div style={{background:C.yellowBg,border:`1px solid ${C.yellow}44`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.yellow,fontWeight:600,marginBottom:12}}>Salario (${fmt(r.salDiario)}) supera 2 UMAs (${fmt(r.tope)}). Se aplica el tope.</div>}
         <TarjetasResumen items={[
           {l:"Años de antigüedad",v:`${r.anios} años`,c:C.navy,bg:C.navyDim},
           {l:"Salario base de cálculo",v:`$${fmt(r.base)}/día`,c:r.excede?C.red:C.green,bg:r.excede?C.redBg:C.greenBg},
@@ -3006,13 +2999,13 @@ function CalculosModule() {
   const [seccion, setSeccion] = useState(null); // null = menú principal
 
   const CALCULOS = [
-    { id:"nomina",      icon:"💵", label:"Nómina",              desc:"ISR, IMSS, INFONAVIT 2026",         color:C.navy },
-    { id:"vacaciones",  icon:"🌴", label:"Vacaciones",          desc:"Prima vacacional y días LFT",        color:"#0891B2" },
-    { id:"aguinaldo",   icon:"🎁", label:"Aguinaldo",           desc:"Proporcional al año en curso",       color:"#D97706" },
-    { id:"finiquito",   icon:"📄", label:"Finiquito",           desc:"Renuncia voluntaria",                color:"#7C3AED" },
-    { id:"liquidacion", icon:"⚖️", label:"Liquidación",         desc:"Despido justificado / injustificado",color:C.red },
-    { id:"ptu",         icon:"💰", label:"PTU",                 desc:"Participación de Utilidades 10%",    color:C.green },
-    { id:"antiguedad",  icon:"🏅", label:"Prima de Antigüedad", desc:"Art. 162 LFT — 12 días por año",    color:"#B45309" },
+    { id:"nomina",      label:"Nómina",              desc:"ISR, IMSS, INFONAVIT 2026",         color:C.navy },
+    { id:"vacaciones",  label:"Vacaciones",          desc:"Prima vacacional y días LFT",        color:"#0891B2" },
+    { id:"aguinaldo",   label:"Aguinaldo",           desc:"Proporcional al año en curso",       color:"#D97706" },
+    { id:"finiquito",   label:"Finiquito",           desc:"Renuncia voluntaria",                color:"#7C3AED" },
+    { id:"liquidacion", label:"Liquidación",         desc:"Despido justificado / injustificado",color:C.red },
+    { id:"ptu",         label:"PTU",                 desc:"Participación de Utilidades 10%",    color:C.green },
+    { id:"antiguedad",  label:"Prima de Antigüedad", desc:"Art. 162 LFT — 12 días por año",    color:"#B45309" },
   ];
 
   if (!seccion) return (
@@ -3025,14 +3018,11 @@ function CalculosModule() {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:16 }}>
         {CALCULOS.map((c,i) => (
           <div key={c.id} className="card" onClick={()=>setSeccion(c.id)}
-            style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:16, padding:24, cursor:"pointer", display:"flex", alignItems:"center", gap:18, transition:"all 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}
-            onMouseEnter={e=>{e.currentTarget.style.border=`1.5px solid ${c.color}`;e.currentTarget.style.boxShadow=`0 4px 20px ${c.color}22`;e.currentTarget.style.transform="translateY(-2px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.border=`1.5px solid ${C.border}`;e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";e.currentTarget.style.transform="";}}>
-            <div style={{ width:60, height:60, borderRadius:14, background:c.color+"18", border:`1.5px solid ${c.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>{c.icon}</div>
-            <div>
-              <div style={{ color:C.navy, fontWeight:800, fontSize:15, marginBottom:4 }}>{c.label}</div>
-              <div style={{ color:C.muted, fontSize:12 }}>{c.desc}</div>
-            </div>
+            style={{ background:C.surface, borderTop:`3px solid ${c.color}`, border:`1.5px solid ${C.border}`, borderRadius:12, padding:22, cursor:"pointer", transition:"all 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}
+            onMouseEnter={e=>{e.currentTarget.style.boxShadow=`0 4px 20px ${c.color}22`;e.currentTarget.style.transform="translateY(-2px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";e.currentTarget.style.transform="";}}>
+            <div style={{ color:C.navy, fontWeight:800, fontSize:15, marginBottom:4 }}>{c.label}</div>
+            <div style={{ color:C.muted, fontSize:12 }}>{c.desc}</div>
           </div>
         ))}
       </div>
@@ -3047,7 +3037,7 @@ function CalculosModule() {
       <style>{ANIM}</style>
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:28, animation:"fadeUp 0.3s ease" }}>
         <button onClick={()=>setSeccion(null)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:10, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:600, fontSize:13 }}>← Cálculos</button>
-        <div style={{ width:44, height:44, borderRadius:12, background:calc.color+"18", border:`1.5px solid ${calc.color}33`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>{calc.icon}</div>
+        <div style={{ width:4, height:36, borderRadius:2, background:calc.color }} />
         <div>
           <h1 style={{ margin:0, color:C.navy, fontSize:20, fontWeight:800 }}>{calc.label}</h1>
           <p style={{ margin:0, color:C.muted, fontSize:13 }}>{calc.desc}</p>
@@ -3137,7 +3127,7 @@ function AsistenteModule({ user }) {
 
       {/* Header */}
       <div style={{ padding:"18px 28px", background:C.surface, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:14 }}>
-        <div style={{ width:44, height:44, borderRadius:12, background:C.navy, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:`0 4px 12px ${C.navy}44` }}>🤖</div>
+        <div style={{ width:44, height:44, borderRadius:12, background:C.navy, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:`0 4px 12px ${C.navy}44` }}></div>
         <div>
           <div style={{ color:C.navy, fontWeight:800, fontSize:16 }}>Asistente COFSA</div>
           <div style={{ color:C.green, fontSize:11, display:"flex", alignItems:"center", gap:4, marginTop:1 }}>
@@ -3159,7 +3149,7 @@ function AsistenteModule({ user }) {
                 <button key={i} onClick={()=>{ setInput(s); }} style={{ background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"10px 14px", color:C.text, fontSize:13, cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"all 0.15s" }}
                   onMouseEnter={e=>{e.currentTarget.style.borderColor=C.navy;e.currentTarget.style.background=C.navyDim;}}
                   onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surface;}}>
-                  💡 {s}
+                  {s}
                 </button>
               ))}
             </div>
@@ -3171,7 +3161,7 @@ function AsistenteModule({ user }) {
           return (
             <div key={i} style={{ display:"flex", gap:12, marginBottom:20, flexDirection:isUser?"row-reverse":"row", animation:"fadeUp 0.25s ease" }}>
               <div style={{ width:36, height:36, borderRadius:"50%", background:isUser?C.navy:C.navyDim, border:`2px solid ${isUser?C.navy:C.navyLight}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
-                {isUser?"👤":"🤖"}
+                {isUser?"":""}
               </div>
               <div style={{ maxWidth:"75%" }}>
                 <div style={{ fontSize:11, color:C.muted, fontWeight:600, marginBottom:4, textAlign:isUser?"right":"left" }}>
@@ -3193,7 +3183,6 @@ function AsistenteModule({ user }) {
 
         {loading && (
           <div style={{ display:"flex", gap:12, marginBottom:20, animation:"fadeUp 0.2s ease" }}>
-            <div style={{ width:36, height:36, borderRadius:"50%", background:C.navyDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
             <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:"14px 14px 14px 4px", padding:"14px 18px", display:"flex", gap:6, alignItems:"center" }}>
               {[0,1,2].map(i=><div key={i} style={{ width:7, height:7, borderRadius:"50%", background:C.navy, opacity:0.4, animation:"pulse 1.2s ease infinite", animationDelay:`${i*0.2}s` }} />)}
             </div>
@@ -3218,7 +3207,7 @@ function AsistenteModule({ user }) {
           </Btn>
         </div>
         <div style={{ color:C.muted, fontSize:11, marginTop:8, textAlign:"center" }}>
-          Asistente especializado en legislación fiscal y contable de México 🇲🇽
+          Asistente especializado en legislación fiscal y contable de México 
         </div>
       </div>
     </div>
@@ -3340,8 +3329,8 @@ function CotizacionesModule({ user }) {
       servicios, subtotal, iva, total, notas, estatus, created_by:user.id,
     }]).select().single();
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar"); return; }
-    showNotif("✅ Cotización guardada");
+    if (error) { showNotif("Error al guardar"); return; }
+    showNotif("Cotización guardada");
     await load();
     resetForm();
     setVista("historial");
@@ -3354,7 +3343,7 @@ function CotizacionesModule({ user }) {
 
   const eliminar = async (id) => {
     await supabase.from("cotizaciones").delete().eq("id",id);
-    showNotif("🗑️ Cotización eliminada");
+    showNotif("Cotización eliminada");
     load();
   };
 
@@ -3490,7 +3479,6 @@ function CotizacionesModule({ user }) {
 
       {loading ? <Spinner/> : cotizaciones.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>📝</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin cotizaciones aún</div>
           <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cotización</Btn>
         </div>
@@ -3517,7 +3505,7 @@ function CotizacionesModule({ user }) {
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{new Date(cot.created_at).toLocaleDateString("es-MX")}</td>
                   <td style={{padding:"12px 14px"}}>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>PDF</button>
                       <button onClick={()=>eliminar(cot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
                     </div>
                   </td>
@@ -3546,7 +3534,7 @@ function CotizacionesModule({ user }) {
         <div>
           {/* Datos del cliente */}
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📋 Datos del cliente</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Datos del cliente</div>
             <Input label="Nombre del cliente *" value={clienteNombre} onChange={e=>setClienteNombre(e.target.value)} placeholder="Ej: Juan García López"/>
             <Input label="Empresa" value={clienteEmpresa} onChange={e=>setClienteEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A. de C.V."/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -3557,7 +3545,7 @@ function CotizacionesModule({ user }) {
 
           {/* Servicios seleccionados */}
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>🧾 Servicios seleccionados ({servicios.length})</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Servicios seleccionados ({servicios.length})</div>
             {servicios.length===0 ? (
               <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Selecciona servicios del catálogo →</div>
             ) : (
@@ -3584,7 +3572,7 @@ function CotizacionesModule({ user }) {
           {/* Totales */}
           {servicios.length>0 && (
             <Card style={{marginBottom:16}}>
-              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>💰 Resumen</div>
+              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Resumen</div>
               {[["Subtotal",`$${fmt(subtotal)}`],["IVA (16%)",`$${fmt(iva)}`]].map(([k,v])=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{color:C.muted,fontSize:13}}>{k}</span>
@@ -3600,21 +3588,21 @@ function CotizacionesModule({ user }) {
 
           {/* Notas / Slogan */}
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>📝 Condiciones y vigencia</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>Condiciones y vigencia</div>
             <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={4}
               style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
           </Card>
 
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteNombre||servicios.length===0} variant="ghost">Guardar borrador</Btn>
-            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||servicios.length===0}>💾 Guardar y enviar</Btn>
+            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||servicios.length===0}>Guardar y enviar</Btn>
           </div>
         </div>
 
         {/* Columna derecha: catálogo */}
         <div>
           <Card>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📚 Catálogo de servicios</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Catálogo de servicios</div>
             {Object.entries(CATALOGO_SERVICIOS).map(([cat,items])=>(
               <div key={cat} style={{marginBottom:6}}>
                 <button onClick={()=>setCatAbierta(catAbierta===cat?null:cat)} style={{
@@ -3969,7 +3957,7 @@ function CedulaImpuestosModule({ user }) {
       error = r.error;
     }
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar: " + error.message); return; }
+    if (error) { showNotif("Error al guardar: " + error.message); return; }
 
     if (estatus === "finalizada" && !editId) {
       const perfilEdgar = (await supabase.from("perfiles").select("id").eq("email", EMAIL_EDGAR).maybeSingle()).data;
@@ -3980,9 +3968,9 @@ function CedulaImpuestosModule({ user }) {
         client: cliente?.name, priority:"alta", status:"todo",
         proceso: "presentacion_declaracion_automatica",
       }]);
-      showNotif(`✅ Cédula finalizada — Tarea de presentación creada para Edgar`);
+      showNotif(`Cédula finalizada — Tarea de presentación creada para Edgar`);
     } else {
-      showNotif(editId ? "✅ Cédula actualizada" : "✅ Cédula guardada como borrador");
+      showNotif(editId ? "Cédula actualizada" : "Cédula guardada como borrador");
     }
     resetForm();
     setVista("historial");
@@ -3991,7 +3979,7 @@ function CedulaImpuestosModule({ user }) {
 
   const eliminar = async (id) => {
     await supabase.from("cedulas_impuestos").delete().eq("id", id);
-    showNotif("🗑️ Cédula eliminada");
+    showNotif("Cédula eliminada");
     load();
   };
 
@@ -4024,21 +4012,20 @@ function CedulaImpuestosModule({ user }) {
           <p style={{margin:0,color:C.muted,fontSize:13}}>{cedulas.length} cédulas registradas</p>
         </div>
         <div style={{display:"flex",gap:10}}>
-          <Btn variant="ghost" onClick={()=>setVista("anual")}>📊 Vista Anual</Btn>
+          <Btn variant="ghost" onClick={()=>setVista("anual")}>Vista Anual</Btn>
           <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cédula</Btn>
         </div>
       </div>
 
       {!loading && pendientesDelMes.length > 0 && (
         <div style={{background:C.yellowBg, border:`1.5px solid ${C.yellow}44`, borderRadius:12, padding:"14px 18px", marginBottom:20}}>
-          <div style={{color:C.yellow, fontWeight:700, fontSize:13, marginBottom:6}}>⚠️ {pendientesDelMes.length} clientes sin cédula de {CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}</div>
+          <div style={{color:C.yellow, fontWeight:700, fontSize:13, marginBottom:6}}>{pendientesDelMes.length} clientes sin cédula de {CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}</div>
           <div style={{color:C.yellow, fontSize:12, opacity:0.85, lineHeight:1.6}}>{pendientesDelMes.map(p=>p.name).join(" · ")}</div>
         </div>
       )}
 
       {loading ? <Spinner/> : cedulas.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>📊</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin cédulas registradas</div>
           <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cédula</Btn>
         </div>
@@ -4065,7 +4052,7 @@ function CedulaImpuestosModule({ user }) {
                   <td style={{padding:"12px 14px"}}>
                     <div style={{display:"flex",gap:6}}>
                       <button onClick={()=>cargarParaEditar(c)} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✎ Editar</button>
-                      <button onClick={()=>descargarMensual(c)} disabled={gen} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>descargarMensual(c)} disabled={gen} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>PDF</button>
                       <button onClick={()=>eliminar(c.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
                     </div>
                   </td>
@@ -4101,7 +4088,7 @@ function CedulaImpuestosModule({ user }) {
             {[anioAnual-1,anioAnual,anioAnual+1].map(a=><option key={a} value={a}>{a}</option>)}
           </FieldSelect>
           {clienteAnualId && (
-            <Btn variant="ghost" onClick={()=>descargarAnual(clienteAnualNombre, anioAnual, cedulasDelCliente)} loading={gen}>⬇️ Descargar PDF Anual</Btn>
+            <Btn variant="ghost" onClick={()=>descargarAnual(clienteAnualNombre, anioAnual, cedulasDelCliente)} loading={gen}>Descargar PDF Anual</Btn>
           )}
         </div>
 
@@ -4181,7 +4168,7 @@ function CedulaImpuestosModule({ user }) {
         </div>
         {!editId && (
           <div style={{color:C.muted,fontSize:11,marginTop:-10,marginBottom:6}}>
-            📌 Preseleccionado el mes contable de trabajo ({CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}). Ajusta si la cédula es de otro período.
+            Preseleccionado el mes contable de trabajo ({CEDULA_MESES_LARGO[mesContableC-1]} {anioContableC}). Ajusta si la cédula es de otro período.
           </div>
         )}
       </Card>
@@ -4465,8 +4452,8 @@ function OrdenesTrabajoModule({ user }) {
     };
     const { error } = await supabase.from("ordenes_trabajo").insert([payload]);
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar la orden"); return; }
-    showNotif("✅ Orden de trabajo creada");
+    if (error) { showNotif("Error al guardar la orden"); return; }
+    showNotif("Orden de trabajo creada");
     resetForm();
     setVista("historial");
     load();
@@ -4474,7 +4461,7 @@ function OrdenesTrabajoModule({ user }) {
 
   const eliminar = async (id) => {
     await supabase.from("ordenes_trabajo").delete().eq("id", id);
-    showNotif("🗑️ Orden eliminada");
+    showNotif("Orden eliminada");
     load();
   };
 
@@ -4608,7 +4595,6 @@ function OrdenesTrabajoModule({ user }) {
 
       {loading ? <Spinner/> : ordenesFiltradas.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>🛠️</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin órdenes de trabajo</div>
           <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera orden</Btn>
         </div>
@@ -4642,7 +4628,7 @@ function OrdenesTrabajoModule({ user }) {
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12,whiteSpace:"nowrap"}}>{new Date(ot.created_at).toLocaleDateString("es-MX")}</td>
                   <td style={{padding:"12px 14px"}}>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>descargarPDF(ot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>descargarPDF(ot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>PDF</button>
                       <button onClick={()=>eliminar(ot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
                     </div>
                   </td>
@@ -4734,7 +4720,7 @@ function OrdenesTrabajoModule({ user }) {
 const SEGUIMIENTO_TABLEROS = {
   constancias: {
     label: "Constancias y Opiniones",
-    icono: "📜",
+    icono: "",
     columnas: [
       { key:"constancia_sat", label:"Constancia Sit. Fiscal (SAT)" },
       { key:"opinion_sat", label:"Opinión Cumplimiento SAT" },
@@ -4745,7 +4731,7 @@ const SEGUIMIENTO_TABLEROS = {
   },
   pagos_imss: {
     label: "Pagos de IMSS",
-    icono: "🏥",
+    icono: "",
     columnas: [
       { key:"solicitado", label:"Solicitado" },
       { key:"sipare", label:"SIPARE" },
@@ -4757,25 +4743,25 @@ const SEGUIMIENTO_TABLEROS = {
   },
   papeles_trabajo: {
     label: "Papeles de Trabajo",
-    icono: "📁",
+    icono: "",
     columnas: [ { key:"papeles_trabajo", label:"Papeles de Trabajo" } ],
     clientesDefault: null, // usa todos los clientes reales
   },
   cedula_impuestos: {
     label: "Cédula de Impuestos",
-    icono: "📊",
+    icono: "",
     columnas: [ { key:"cedula", label:"Cédula de Impuestos" } ],
     clientesDefault: null,
   },
   presentacion_impuestos: {
     label: "Presentación de Impuestos",
-    icono: "💰",
+    icono: "",
     columnas: [ { key:"presentacion", label:"Presentación de Declaración" } ],
     clientesDefault: null,
   },
   diot: {
     label: "Presentación DIOT",
-    icono: "📑",
+    icono: "",
     columnas: [ { key:"diot", label:"Declaración Informativa DIOT" } ],
     clientesDefault: null,
   },
@@ -4917,7 +4903,7 @@ function SeguimientoModule() {
           <div style={{ color:C.navy, fontWeight:800, fontSize:16, minWidth:160, textAlign:"center" }}>{MESES[mes-1]} {anio}</div>
           <button onClick={()=>cambiarMes(1)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:9, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14 }}>→</button>
           {mes===mesContableInicial && anio===anioContableInicial && (
-            <span style={{ background:C.navyDim, color:C.navy, borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700 }}>📌 Mes en curso de trabajo</span>
+            <span style={{ background:C.navyDim, color:C.navy, borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700 }}>Mes en curso de trabajo</span>
           )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -5126,7 +5112,7 @@ function ReporteMensualModule() {
           </Card>
 
           {/* Tabla de órdenes de trabajo del mes */}
-          <div style={{color:C.navy,fontWeight:800,fontSize:15,marginBottom:10}}>🛠️ Órdenes de trabajo del mes ({ordenesFiltradas.length})</div>
+          <div style={{color:C.navy,fontWeight:800,fontSize:15,marginBottom:10}}>Órdenes de trabajo del mes ({ordenesFiltradas.length})</div>
           <Card style={{padding:0,overflow:"hidden"}}>
             {ordenesFiltradas.length===0 ? (
               <div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Sin órdenes de trabajo en este período</div>
@@ -5222,11 +5208,11 @@ function FyncoDashboard() {
   });
 
   const cards = [
-    { label:"Ingresos del mes", value:`$${fmt(ingresoMes)}`, icon:"💰", color:C.green, bg:C.greenBg },
-    { label:"Gastos del mes", value:`$${fmt(gastoMes)}`, icon:"💸", color:C.red, bg:C.redBg },
-    { label:"Clientes por vencer (30 días)", value:porVencer.length, icon:"⏳", color:C.yellow, bg:C.yellowBg },
-    { label:"Clientes vencidos", value:vencidos.length, icon:"⚠️", color:C.red, bg:C.redBg },
-    { label:"Nuevos clientes del mes", value:clientesNuevosMes.length, icon:"✨", color:C.accent, bg:C.navyDim },
+    { label:"Ingresos del mes", value:`$${fmt(ingresoMes)}`, color:C.green, bg:C.greenBg },
+    { label:"Gastos del mes", value:`$${fmt(gastoMes)}`, color:C.red, bg:C.redBg },
+    { label:"Clientes por vencer (30 días)", value:porVencer.length, color:C.yellow, bg:C.yellowBg },
+    { label:"Clientes vencidos", value:vencidos.length, color:C.red, bg:C.redBg },
+    { label:"Nuevos clientes del mes", value:clientesNuevosMes.length, color:C.accent, bg:C.navyDim },
   ];
 
   return (
@@ -5240,11 +5226,9 @@ function FyncoDashboard() {
       {loading ? <Spinner/> : (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:16, marginBottom:28 }}>
           {cards.map(c=>(
-            <div key={c.label} className="card" style={{ background:c.bg, border:`1.5px solid ${c.color}33`, borderRadius:14, padding:22, position:"relative", overflow:"hidden" }}>
-              <div style={{ position:"absolute", top:-10, right:-10, fontSize:48, opacity:0.08 }}>{c.icon}</div>
-              <div style={{ fontSize:20, marginBottom:10 }}>{c.icon}</div>
-              <div style={{ color:c.color, fontSize:26, fontWeight:800 }}>{c.value}</div>
-              <div style={{ color:c.color, fontSize:12, marginTop:4, opacity:0.85, fontWeight:500 }}>{c.label}</div>
+            <div key={c.label} className="card" style={{ background:c.bg, borderTop:`3px solid ${c.color}`, borderRadius:10, padding:"20px 22px" }}>
+              <div style={{ color:c.color, fontSize:24, fontWeight:800 }}>{c.value}</div>
+              <div style={{ color:c.color, fontSize:12, marginTop:8, opacity:0.85, fontWeight:500 }}>{c.label}</div>
             </div>
           ))}
         </div>
@@ -5252,7 +5236,7 @@ function FyncoDashboard() {
 
       {!loading && (vencidos.length>0 || porVencer.length>0) && (
         <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",background:C.navy,color:C.white,fontWeight:700,fontSize:13}}>⏳ Clientes que requieren atención</div>
+          <div style={{padding:"12px 16px",background:C.navy,color:C.white,fontWeight:700,fontSize:13}}>Clientes que requieren atención</div>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{background:C.panel}}>
@@ -5309,8 +5293,8 @@ function FyncoClientesModule({ user }) {
       ...form, monto_mensual: parseFloat(form.monto_mensual)||0, created_by:user.id,
     }]);
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar"); return; }
-    showNotif("✅ Cliente agregado");
+    if (error) { showNotif("Error al guardar"); return; }
+    showNotif("Cliente agregado");
     setShowAdd(false);
     setForm({ razon_social:"", rfc:"", correo:"", paquete:"", monto_mensual:"", fecha_alta:new Date().toISOString().slice(0,10), fecha_vencimiento:"" });
     load();
@@ -5318,7 +5302,7 @@ function FyncoClientesModule({ user }) {
 
   const eliminar = async (id) => {
     await supabase.from("fynco_clientes").delete().eq("id",id);
-    showNotif("🗑️ Cliente eliminado");
+    showNotif("Cliente eliminado");
     load();
   };
 
@@ -5358,7 +5342,6 @@ function FyncoClientesModule({ user }) {
 
       {loading ? <Spinner/> : clientes.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>👥</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin clientes aún</div>
           <Btn onClick={()=>setShowAdd(true)}>Agregar primer cliente</Btn>
         </div>
@@ -5451,8 +5434,8 @@ function FyncoGastosModule({ user }) {
       tipo:"gasto", concepto:form.concepto, monto:parseFloat(form.monto)||0, fecha:form.fecha, created_by:user.id,
     }]);
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar"); return; }
-    showNotif("✅ Gasto registrado");
+    if (error) { showNotif("Error al guardar"); return; }
+    showNotif("Gasto registrado");
     setShowAdd(false);
     setForm({ concepto:"", monto:"", fecha:new Date().toISOString().slice(0,10) });
     load();
@@ -5460,7 +5443,7 @@ function FyncoGastosModule({ user }) {
 
   const eliminar = async (id) => {
     await supabase.from("fynco_movimientos").delete().eq("id",id);
-    showNotif("🗑️ Gasto eliminado");
+    showNotif("Gasto eliminado");
     load();
   };
 
@@ -5498,7 +5481,6 @@ function FyncoGastosModule({ user }) {
 
       {loading ? <Spinner/> : gastosFiltrados.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>💸</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin gastos registrados en {MESES[mesFiltro]}</div>
           <Btn onClick={()=>setShowAdd(true)}>Registrar primer gasto</Btn>
         </div>
@@ -5601,14 +5583,14 @@ function FyncoCotizacionesModule({ user }) {
       paquetes:paquetesSel, subtotal, iva, total, notas, estatus, created_by:user.id,
     }]);
     setSaving(false);
-    if (error) { showNotif("❌ Error al guardar"); return; }
-    showNotif("✅ Cotización guardada");
+    if (error) { showNotif("Error al guardar"); return; }
+    showNotif("Cotización guardada");
     await load(); resetForm(); setVista("historial");
   };
 
   const eliminar = async (id) => {
     await supabase.from("fynco_cotizaciones").delete().eq("id",id);
-    showNotif("🗑️ Cotización eliminada");
+    showNotif("Cotización eliminada");
     load();
   };
 
@@ -5732,7 +5714,6 @@ function FyncoCotizacionesModule({ user }) {
 
       {loading ? <Spinner/> : cotizaciones.length===0 ? (
         <div style={{textAlign:"center",padding:60,color:C.muted}}>
-          <div style={{fontSize:48,marginBottom:12}}>📝</div>
           <div style={{fontWeight:600,marginBottom:8}}>Sin cotizaciones aún</div>
           <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cotización</Btn>
         </div>
@@ -5759,7 +5740,7 @@ function FyncoCotizacionesModule({ user }) {
                   <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{new Date(cot.created_at).toLocaleDateString("es-MX")}</td>
                   <td style={{padding:"12px 14px"}}>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>⬇️ PDF</button>
+                      <button onClick={()=>descargarPDF(cot)} disabled={gen} style={{background:C.navyDim,border:`1px solid ${C.navy}33`,borderRadius:7,color:C.navy,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>PDF</button>
                       <button onClick={()=>eliminar(cot.id)} style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:7,color:C.red,cursor:"pointer",padding:"5px 10px",fontSize:11,fontFamily:"inherit"}}>✕</button>
                     </div>
                   </td>
@@ -5784,7 +5765,7 @@ function FyncoCotizacionesModule({ user }) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
         <div>
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📋 Datos del cliente</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Datos del cliente</div>
             <Input label="Nombre del cliente *" value={clienteNombre} onChange={e=>setClienteNombre(e.target.value)} placeholder="Ej: Juan García López"/>
             <Input label="Empresa" value={clienteEmpresa} onChange={e=>setClienteEmpresa(e.target.value)} placeholder="Ej: Grupo Regio S.A. de C.V."/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -5794,7 +5775,7 @@ function FyncoCotizacionesModule({ user }) {
           </Card>
 
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📦 Paquetes seleccionados ({paquetesSel.length})</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Paquetes seleccionados ({paquetesSel.length})</div>
             {paquetesSel.length===0 ? (
               <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Selecciona paquetes del catálogo →</div>
             ) : (
@@ -5818,7 +5799,7 @@ function FyncoCotizacionesModule({ user }) {
 
           {paquetesSel.length>0 && (
             <Card style={{marginBottom:16}}>
-              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>💰 Resumen</div>
+              <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Resumen</div>
               {[["Subtotal",`$${fmt(subtotal)}`],["IVA (16%)",`$${fmt(iva)}`]].map(([k,v])=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{color:C.muted,fontSize:13}}>{k}</span>
@@ -5833,20 +5814,20 @@ function FyncoCotizacionesModule({ user }) {
           )}
 
           <Card style={{marginBottom:16}}>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>📝 Condiciones y vigencia</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:10}}>Condiciones y vigencia</div>
             <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={4}
               style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
           </Card>
 
           <div style={{display:"flex",gap:10}}>
             <Btn onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteNombre||paquetesSel.length===0} variant="ghost">Guardar borrador</Btn>
-            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||paquetesSel.length===0}>💾 Guardar y enviar</Btn>
+            <Btn onClick={()=>guardar("enviada")} loading={saving} disabled={!clienteNombre||paquetesSel.length===0}>Guardar y enviar</Btn>
           </div>
         </div>
 
         <div>
           <Card>
-            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>📚 Catálogo de paquetes</div>
+            <div style={{color:C.navy,fontWeight:700,fontSize:14,marginBottom:14}}>Catálogo de paquetes</div>
             <div style={{display:"flex",gap:8,marginBottom:14}}>
               {[["folios","Folios CFDI"],["despacho","Planes Despacho"]].map(([v,l])=>(
                 <button key={v} onClick={()=>setTabCatalogo(v)} style={{flex:1,padding:"8px 12px",borderRadius:9,border:`1.5px solid ${tabCatalogo===v?C.navy:C.border}`,background:tabCatalogo===v?C.navy:"transparent",color:tabCatalogo===v?C.white:C.muted,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,transition:"all 0.15s"}}>{l}</button>
