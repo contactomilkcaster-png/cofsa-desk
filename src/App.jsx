@@ -252,6 +252,8 @@ const NAV_COFSA = [
   { id:"dashboard", icon:"⊞", label:"Dashboard" },
   { id:"impuestos", icon:"📋", label:"Impuestos" },
   { id:"ordenes", icon:"🛠️", label:"Órdenes de Trabajo" },
+  { id:"cedulas", icon:"📊", label:"Cédulas de Impuestos" },
+  { id:"reporte", icon:"📈", label:"Reporte Mensual" },
   { id:"tareas", icon:"✓", label:"Tareas" },
   { id:"chat", icon:"💬", label:"Chat" },
   { id:"clientes", icon:"👥", label:"Clientes" },
@@ -3593,6 +3595,373 @@ function CotizacionesModule({ user }) {
   );
 }
 
+// ── CÉDULA DE IMPUESTOS ───────────────────────────────────────────────────
+
+function CedulaImpuestosModule({ user }) {
+  const [vista, setVista] = useState("historial");
+  const [cedulas, setCedulas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [perfiles, setPerfiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notif, setNotif] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const [clienteId, setClienteId] = useState("");
+  const [mes, setMes] = useState(new Date().getMonth()+1);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [isrCausado, setIsrCausado] = useState("");
+  const [isrRetenido, setIsrRetenido] = useState("");
+  const [ivaCausado, setIvaCausado] = useState("");
+  const [ivaAcreditable, setIvaAcreditable] = useState("");
+  const [notas, setNotas] = useState("");
+
+  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const fmt = n => parseFloat(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const load = async () => {
+    setLoading(true);
+    const [c, cl, p] = await Promise.all([
+      supabase.from("cedulas_impuestos").select("*").order("created_at",{ascending:false}),
+      supabase.from("clientes").select("*").order("name"),
+      supabase.from("perfiles").select("*"),
+    ]);
+    setCedulas(c.data||[]);
+    setClientes(cl.data||[]);
+    setPerfiles(p.data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const showNotif = msg => { setNotif(msg); setTimeout(()=>setNotif(null),3500); };
+
+  const resetForm = () => {
+    setClienteId(""); setMes(new Date().getMonth()+1); setAnio(new Date().getFullYear());
+    setIsrCausado(""); setIsrRetenido(""); setIvaCausado(""); setIvaAcreditable(""); setNotas("");
+  };
+
+  const ivaAPagar = (parseFloat(ivaCausado)||0) - (parseFloat(ivaAcreditable)||0);
+
+  const guardar = async (estatus) => {
+    if (!clienteId) return;
+    setSaving(true);
+    const cliente = clientes.find(c=>c.id===clienteId);
+    const payload = {
+      cliente_id: clienteId, cliente_nombre: cliente?.name || "",
+      mes, anio,
+      isr_causado: parseFloat(isrCausado)||0, isr_retenido: parseFloat(isrRetenido)||0,
+      iva_causado: parseFloat(ivaCausado)||0, iva_acreditable: parseFloat(ivaAcreditable)||0,
+      iva_a_pagar: ivaAPagar,
+      notas, estatus, created_by: user?.id || null,
+    };
+    const { error } = await supabase.from("cedulas_impuestos").insert([payload]);
+    setSaving(false);
+    if (error) { showNotif("❌ Error al guardar"); return; }
+
+    if (estatus === "finalizada") {
+      // Disparar tarea automática: Jessiel → DIOT
+      const perfilJessiel = perfiles.find(p=>p.email===EMAIL_JESSIEL);
+      await supabase.from("tareas").insert([{
+        title: `Declaración Informativa DIOT — ${cliente?.name}`,
+        description: `Presentar la Declaración Informativa de Operaciones con Terceros (DIOT) del cliente ${cliente?.name}, correspondiente a ${MESES[mes-1]} ${anio}. Generada automáticamente al finalizar la cédula de impuestos.`,
+        assigned_to: perfilJessiel?.id || null,
+        client: cliente?.name, priority:"alta", status:"todo",
+        proceso: "diot_automatica",
+      }]);
+      showNotif(`✅ Cédula finalizada — Tarea de DIOT creada para Jessiel`);
+    } else {
+      showNotif("✅ Cédula guardada como borrador");
+    }
+    resetForm();
+    setVista("historial");
+    load();
+  };
+
+  const finalizarYDispararEdgar = async (cedula) => {
+    // Marca cédula como finalizada (si no lo estaba) y dispara tarea para Edgar de presentación de impuestos
+    await supabase.from("cedulas_impuestos").update({ estatus:"finalizada" }).eq("id", cedula.id);
+    const perfilEdgar = perfiles.find(p=>p.email===EMAIL_EDGAR);
+    await supabase.from("tareas").insert([{
+      title: `Presentación de impuestos — ${cedula.cliente_nombre}`,
+      description: `Presentar ante el SAT los impuestos de ${cedula.cliente_nombre} correspondientes a ${MESES[cedula.mes-1]} ${cedula.anio}. ISR a cargo: $${fmt(cedula.isr_causado)} · IVA a pagar: $${fmt(cedula.iva_a_pagar)}. Generada automáticamente al subir la cédula de impuestos.`,
+      assigned_to: perfilEdgar?.id || null,
+      client: cedula.cliente_nombre, priority:"alta", status:"todo",
+      proceso: "presentacion_impuestos_automatica",
+    }]);
+    showNotif(`✅ Tarea de presentación de impuestos creada para Edgar`);
+    load();
+  };
+
+  if (vista === "historial") return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      {notif && <div style={{position:"fixed",top:20,right:20,zIndex:2000,background:C.navy,borderRadius:12,padding:"14px 20px",color:C.white,fontSize:14,fontWeight:600,boxShadow:"0 8px 32px rgba(27,42,74,0.3)",animation:"slideIn 0.3s ease"}}>{notif}</div>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,animation:"fadeUp 0.3s ease"}}>
+        <div>
+          <h1 style={{margin:"0 0 2px",color:C.navy,fontSize:22,fontWeight:800}}>Cédulas de Impuestos</h1>
+          <p style={{margin:0,color:C.muted,fontSize:13}}>{cedulas.length} cédulas registradas</p>
+        </div>
+        <Btn onClick={()=>{resetForm();setVista("nueva");}}>+ Nueva cédula</Btn>
+      </div>
+
+      {/* Clientes pendientes del mes actual */}
+      {!loading && (() => {
+        const mesActual = new Date().getMonth()+1, anioActual = new Date().getFullYear();
+        const clientesConCedula = new Set(cedulas.filter(c=>c.mes===mesActual && c.anio===anioActual).map(c=>c.cliente_nombre));
+        const pendientes = clientes.filter(c=>!clientesConCedula.has(c.name));
+        if (pendientes.length === 0) return null;
+        return (
+          <div style={{background:C.yellowBg, border:`1.5px solid ${C.yellow}44`, borderRadius:12, padding:"14px 18px", marginBottom:20}}>
+            <div style={{color:C.yellow, fontWeight:700, fontSize:13, marginBottom:6}}>⚠️ {pendientes.length} clientes sin cédula este mes ({MESES[mesActual-1]} {anioActual})</div>
+            <div style={{color:C.yellow, fontSize:12, opacity:0.85, lineHeight:1.6}}>{pendientes.map(p=>p.name).join(" · ")}</div>
+          </div>
+        );
+      })()}
+
+      {loading ? <Spinner/> : cedulas.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>📊</div>
+          <div style={{fontWeight:600,marginBottom:8}}>Sin cédulas registradas</div>
+          <Btn onClick={()=>{resetForm();setVista("nueva");}}>Crear primera cédula</Btn>
+        </div>
+      ) : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:C.panel}}>
+                {["Cliente","Período","ISR causado","IVA a pagar","Estatus","Acciones"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cedulas.map(c=>(
+                <tr key={c.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{c.cliente_nombre}</td>
+                  <td style={{padding:"12px 14px",color:C.muted,fontSize:12}}>{MESES[c.mes-1]} {c.anio}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt(c.isr_causado)}</td>
+                  <td style={{padding:"12px 14px",color:C.text,fontSize:13}}>${fmt(c.iva_a_pagar)}</td>
+                  <td style={{padding:"12px 14px"}}>
+                    <span style={{background:(c.estatus==="finalizada"?C.green:C.muted)+"22",color:c.estatus==="finalizada"?C.green:C.muted,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{c.estatus}</span>
+                  </td>
+                  <td style={{padding:"12px 14px"}}>
+                    {c.estatus==="borrador" && (
+                      <button onClick={()=>finalizarYDispararEdgar(c)} style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:7,color:C.green,cursor:"pointer",padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>✓ Finalizar → Edgar</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{padding:28,maxWidth:700}}>
+      <style>{ANIM}</style>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,animation:"fadeUp 0.3s ease"}}>
+        <button onClick={()=>{setVista("historial");resetForm();}} style={{background:C.navyDim,border:"none",color:C.navy,borderRadius:10,padding:"8px 14px",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:13}}>← Historial</button>
+        <h1 style={{margin:0,color:C.navy,fontSize:20,fontWeight:800}}>Nueva Cédula de Impuestos</h1>
+      </div>
+
+      <Card style={{marginBottom:16}}>
+        <FieldSelect label="Cliente *" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
+          <option value="">— Selecciona un cliente —</option>
+          {clientes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </FieldSelect>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <FieldSelect label="Mes" value={mes} onChange={e=>setMes(parseInt(e.target.value))}>
+            {MESES.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+          </FieldSelect>
+          <FieldSelect label="Año" value={anio} onChange={e=>setAnio(parseInt(e.target.value))}>
+            {[anio-1,anio,anio+1].map(a=><option key={a} value={a}>{a}</option>)}
+          </FieldSelect>
+        </div>
+
+        <div style={{color:C.navy,fontWeight:700,fontSize:14,margin:"16px 0 10px"}}>ISR</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="ISR causado $" type="number" value={isrCausado} onChange={e=>setIsrCausado(e.target.value)} placeholder="0.00"/>
+          <Input label="ISR retenido $" type="number" value={isrRetenido} onChange={e=>setIsrRetenido(e.target.value)} placeholder="0.00"/>
+        </div>
+
+        <div style={{color:C.navy,fontWeight:700,fontSize:14,margin:"16px 0 10px"}}>IVA</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="IVA causado $" type="number" value={ivaCausado} onChange={e=>setIvaCausado(e.target.value)} placeholder="0.00"/>
+          <Input label="IVA acreditable $" type="number" value={ivaAcreditable} onChange={e=>setIvaAcreditable(e.target.value)} placeholder="0.00"/>
+        </div>
+        <div style={{background:C.navyDim,borderRadius:10,padding:"10px 14px",marginTop:8,marginBottom:16}}>
+          <span style={{color:C.navy,fontWeight:700,fontSize:14}}>IVA a pagar: ${fmt(ivaAPagar)}</span>
+        </div>
+
+        <div style={{marginBottom:8}}>
+          <div style={{color:C.muted,fontSize:11,marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notas</div>
+          <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={3}
+            style={{width:"100%",background:C.panel,border:`1.5px solid ${C.border}`,borderRadius:9,padding:"10px 14px",color:C.text,fontSize:14,outline:"none",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+      </Card>
+
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <Btn variant="ghost" onClick={()=>guardar("borrador")} loading={saving} disabled={!clienteId}>Guardar borrador</Btn>
+        <Btn onClick={()=>guardar("finalizada")} loading={saving} disabled={!clienteId}>✓ Finalizar cédula (dispara DIOT a Jessiel)</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── AUTOMATIZACIÓN DE PROCESOS ────────────────────────────────────────────
+
+const EMAIL_RICARDO = "ricardo.cerda@cofsamty.com";
+const EMAIL_EDGAR = "cofsamty@gmail.com";
+const EMAIL_JESSIEL = "jessiel.tamez@cofsamty.com";
+
+// Clientes para constancias SAT/INFONAVIT/Estado NL (día 1-6, Jessiel)
+const CLIENTES_CONSTANCIAS = [
+  "Ramiro Gandara Reyes", "Raul Ricardo Gandara Reyes", "Luis Antonio Arevalo Gutierrez",
+  "Union Flores Ferretera SA de CV", "Rarg Industrial de Mexico SA de CV", "Remfi SA de CV",
+  "Quarum Stone SA de CV", "Resin Colors", "Engranes Herringbone de Monterrey S de RL Mi",
+  "Energy Refinados SA de CV", "Lab Disel Gama", "Campel", "Plasticos Happy Time SA de CV",
+];
+
+// Clientes para pagos IMSS (día 8-11, Jessiel)
+const CLIENTES_IMSS_PAGOS = [
+  "Union Flores Ferretera SA de CV", "Plasticos Happy Time SA de CV", "Campel", "Quarum Stone SA de CV",
+  "Am Guerra", "Remfi SA de CV", "Ramiro Gandara Reyes", "Resin Colors",
+  "Engranes Herringbone de Monterrey S de RL Mi", "Grupo Promotor de Inversion y Desarrollo Fuste",
+  "Manuel Gaona", "Lubrinorte", "Ra-Tec",
+];
+
+const norm = (s) => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+
+// Empareja un nombre de la lista de procesos contra los clientes reales en la BD (tolera mayúsc/acentos)
+function matchClienteReal(nombreProceso, clientesReales) {
+  const n = norm(nombreProceso);
+  let match = clientesReales.find(c => norm(c.name) === n);
+  if (match) return match;
+  match = clientesReales.find(c => norm(c.name).includes(n) || n.includes(norm(c.name)));
+  return match || null;
+}
+
+async function existeTareaProceso(proceso, mes, anio, clienteNombre) {
+  const { data } = await supabase.from("automatizacion_log").select("id")
+    .eq("proceso", proceso).eq("mes", mes).eq("anio", anio).eq("cliente_nombre", clienteNombre || "").maybeSingle();
+  return !!data;
+}
+
+async function registrarProceso(proceso, mes, anio, clienteNombre) {
+  await supabase.from("automatizacion_log").insert([{ proceso, mes, anio, cliente_nombre: clienteNombre || "" }]);
+}
+
+async function crearTareaAutomatica({ title, description, assigned_email, due_date, client, proceso, perfiles }) {
+  const perfil = perfiles.find(p => p.email === assigned_email);
+  await supabase.from("tareas").insert([{
+    title, description,
+    assigned_to: perfil?.id || null,
+    due_date, client: client || null,
+    priority: "media", status: "todo",
+    proceso,
+  }]);
+}
+
+// Motor principal: revisa la fecha actual y genera las tareas que correspondan, evitando duplicados
+async function ejecutarAutomatizacionMensual() {
+  const hoy = new Date();
+  const dia = hoy.getDate();
+  const mes = hoy.getMonth() + 1;
+  const anio = hoy.getFullYear();
+  const diaSemana = hoy.getDay(); // 0=domingo, 3=miércoles
+
+  const [{ data: clientesReales }, { data: perfiles }] = await Promise.all([
+    supabase.from("clientes").select("id,name"),
+    supabase.from("perfiles").select("id,email,nombre"),
+  ]);
+  if (!clientesReales || !perfiles) return;
+
+  // ── Proceso 1: Jessiel — Constancias SAT/INFONAVIT/Estado NL (día 1-6) ──
+  if (dia >= 1 && dia <= 6) {
+    for (const nombreCliente of CLIENTES_CONSTANCIAS) {
+      const cliente = matchClienteReal(nombreCliente, clientesReales);
+      const nombreFinal = cliente?.name || nombreCliente;
+      const proceso = "constancias_mensuales";
+      if (await existeTareaProceso(proceso, mes, anio, nombreFinal)) continue;
+      await crearTareaAutomatica({
+        title: `Constancia situación fiscal + Opinión cumplimiento + INFONAVIT + Estado NL — ${nombreFinal}`,
+        description: `Solicitar y enviar al cliente: Constancia de Situación Fiscal, Opinión de Cumplimiento SAT, constancia INFONAVIT y constancia del Estado de Nuevo León. Proceso mensual recurrente (día 1-6).`,
+        assigned_email: EMAIL_JESSIEL,
+        due_date: new Date(anio, mes-1, 6).toISOString().slice(0,10),
+        client: nombreFinal, proceso, perfiles,
+      });
+      await registrarProceso(proceso, mes, anio, nombreFinal);
+    }
+  }
+
+  // ── Proceso 2: Jessiel — Pagos IMSS (día 8-11) ──
+  if (dia >= 8 && dia <= 11) {
+    for (const nombreCliente of CLIENTES_IMSS_PAGOS) {
+      const cliente = matchClienteReal(nombreCliente, clientesReales);
+      const nombreFinal = cliente?.name || nombreCliente;
+      const proceso = "pagos_imss_mensuales";
+      if (await existeTareaProceso(proceso, mes, anio, nombreFinal)) continue;
+      await crearTareaAutomatica({
+        title: `Pago IMSS (IDSE, SIPARE, SUA) — ${nombreFinal}`,
+        description: `Solicitar y enviar: Desglose IDSE, Pago SIPARE, Desglose SUA y Archivo SUA. Proceso mensual recurrente (día 8-11).`,
+        assigned_email: EMAIL_JESSIEL,
+        due_date: new Date(anio, mes-1, 11).toISOString().slice(0,10),
+        client: nombreFinal, proceso, perfiles,
+      });
+      await registrarProceso(proceso, mes, anio, nombreFinal);
+    }
+  }
+
+  // ── Proceso 3: Ricardo — Papeles de trabajo (día 5-17), individual por cliente ──
+  if (dia >= 5 && dia <= 17) {
+    for (const cliente of clientesReales) {
+      const proceso = "papeles_trabajo_mensual";
+      if (await existeTareaProceso(proceso, mes, anio, cliente.name)) continue;
+      await crearTareaAutomatica({
+        title: `Presentar papeles de trabajo — ${cliente.name}`,
+        description: `Elaborar y presentar los papeles de trabajo mensuales del cliente ${cliente.name}. Al finalizar, llenar la Cédula de Impuestos de este cliente — esto disparará automáticamente la tarea de Declaración Informativa DIOT para Jessiel.`,
+        assigned_email: EMAIL_RICARDO,
+        due_date: new Date(anio, mes-1, 17).toISOString().slice(0,10),
+        client: cliente.name, proceso, perfiles,
+      });
+      await registrarProceso(proceso, mes, anio, cliente.name);
+    }
+  }
+
+  // ── Proceso 4: Ricardo — Archivar papelería (día 17-30), individual por cliente ──
+  if (dia >= 17 && dia <= 30) {
+    for (const cliente of clientesReales) {
+      const proceso = "archivar_papeleria_mensual";
+      if (await existeTareaProceso(proceso, mes, anio, cliente.name)) continue;
+      await crearTareaAutomatica({
+        title: `Archivar papelería — ${cliente.name}`,
+        description: `Archivar físicamente y/o digitalmente toda la papelería del mes del cliente ${cliente.name}.`,
+        assigned_email: EMAIL_RICARDO,
+        due_date: new Date(anio, mes-1, 30).toISOString().slice(0,10),
+        client: cliente.name, proceso, perfiles,
+      });
+      await registrarProceso(proceso, mes, anio, cliente.name);
+    }
+  }
+
+  // ── Proceso 5: Ricardo — Nómina Ramiro Gandara, todos los miércoles ──
+  if (diaSemana === 3) {
+    const proceso = "nomina_ramiro_semanal";
+    const semanaKey = `${anio}-W${Math.ceil((dia + new Date(anio,mes-1,1).getDay())/7)}`;
+    if (!(await existeTareaProceso(proceso, mes, anio, semanaKey))) {
+      await crearTareaAutomatica({
+        title: `Envío de nómina — Ramiro Gandara Reyes`,
+        description: `Calcular y enviar la nómina semanal a Ramiro Gandara Reyes. Tarea recurrente todos los miércoles.`,
+        assigned_email: EMAIL_RICARDO,
+        due_date: hoy.toISOString().slice(0,10),
+        client: "Ramiro Gandara Reyes", proceso, perfiles,
+      });
+      await registrarProceso(proceso, mes, anio, semanaKey);
+    }
+  }
+}
+
 // ── ÓRDENES DE TRABAJO ────────────────────────────────────────────────────
 
 const OT_CATEGORIAS = ["Declaración", "SAT", "IMSS", "Cálculos", "INFONAVIT"];
@@ -3943,6 +4312,179 @@ function OrdenesTrabajoModule({ user }) {
         <Btn variant="ghost" onClick={()=>{setVista("historial");resetForm();}}>Cancelar</Btn>
         <Btn onClick={guardar} loading={saving} disabled={!formValido()}>Generar orden de trabajo</Btn>
       </div>
+    </div>
+  );
+}
+
+// ── REPORTE MENSUAL ───────────────────────────────────────────────────────
+
+function ReporteMensualModule() {
+  const [tareas, setTareas] = useState([]);
+  const [ordenes, setOrdenes] = useState([]);
+  const [perfiles, setPerfiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [mes, setMes] = useState(new Date().getMonth()+1);
+  const [anio, setAnio] = useState(new Date().getFullYear());
+  const [filtroColaborador, setFiltroColaborador] = useState("");
+
+  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+  const load = async () => {
+    setLoading(true);
+    const [t, o, p] = await Promise.all([
+      supabase.from("tareas").select("*"),
+      supabase.from("ordenes_trabajo").select("*"),
+      supabase.from("perfiles").select("*"),
+    ]);
+    setTareas(t.data||[]);
+    setOrdenes(o.data||[]);
+    setPerfiles(p.data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const enMes = (fechaStr) => {
+    if (!fechaStr) return false;
+    const f = new Date(fechaStr);
+    return f.getMonth()+1===mes && f.getFullYear()===anio;
+  };
+
+  const tareasMes = tareas.filter(t => enMes(t.created_at));
+  const ordenesMes = ordenes.filter(o => enMes(o.created_at));
+
+  const tareasFiltradas = filtroColaborador ? tareasMes.filter(t=>t.assigned_to===filtroColaborador) : tareasMes;
+  const ordenesFiltradas = filtroColaborador ? [] : ordenesMes; // órdenes no tienen asignado directo
+
+  const getPerfil = id => perfiles.find(p=>p.id===id);
+
+  const porColaborador = perfiles.map(p => {
+    const sus = tareasMes.filter(t=>t.assigned_to===p.id);
+    return {
+      perfil: p,
+      total: sus.length,
+      completadas: sus.filter(t=>t.status==="done").length,
+      pendientes: sus.filter(t=>t.status!=="done").length,
+    };
+  }).filter(x=>x.total>0);
+
+  const STATUS_LABEL = { todo:"Por hacer", in_progress:"En proceso", review:"En revisión", done:"Completado" };
+  const STATUS_COLOR = { todo:C.muted, in_progress:C.accent, review:C.yellow, done:C.green };
+
+  return (
+    <div style={{padding:28}}>
+      <style>{ANIM}</style>
+      <div style={{marginBottom:20,animation:"fadeUp 0.3s ease"}}>
+        <h1 style={{margin:"0 0 4px",color:C.navy,fontSize:22,fontWeight:800}}>Reporte Mensual</h1>
+        <p style={{margin:0,color:C.muted,fontSize:13}}>Panorama completo de tareas y órdenes de trabajo del mes</p>
+      </div>
+
+      {/* Filtros */}
+      <div style={{display:"flex",gap:10,marginBottom:24,flexWrap:"wrap",alignItems:"center"}}>
+        <FieldSelect value={mes} onChange={e=>setMes(parseInt(e.target.value))} style={{width:160}}>
+          {MESES.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+        </FieldSelect>
+        <FieldSelect value={anio} onChange={e=>setAnio(parseInt(e.target.value))} style={{width:110}}>
+          {[anio-1,anio,anio+1].map(a=><option key={a} value={a}>{a}</option>)}
+        </FieldSelect>
+        <FieldSelect value={filtroColaborador} onChange={e=>setFiltroColaborador(e.target.value)} style={{width:200}}>
+          <option value="">— Todos los colaboradores —</option>
+          {perfiles.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+        </FieldSelect>
+      </div>
+
+      {loading ? <Spinner/> : (
+        <>
+          {/* Resumen por colaborador */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(220px,1fr))",gap:14,marginBottom:28}}>
+            {porColaborador.map(({perfil,total,completadas,pendientes})=>(
+              <Card key={perfil.id} style={{padding:18}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",background:C.navyDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.navy}}>{perfil.nombre.substring(0,2).toUpperCase()}</div>
+                  <div style={{color:C.navy,fontWeight:700,fontSize:14}}>{perfil.nombre}</div>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <div style={{flex:1,background:C.navyDim,borderRadius:8,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{color:C.navy,fontWeight:800,fontSize:18}}>{total}</div>
+                    <div style={{color:C.navy,fontSize:10,opacity:0.7}}>Total</div>
+                  </div>
+                  <div style={{flex:1,background:C.greenBg,borderRadius:8,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{color:C.green,fontWeight:800,fontSize:18}}>{completadas}</div>
+                    <div style={{color:C.green,fontSize:10,opacity:0.7}}>Hechas</div>
+                  </div>
+                  <div style={{flex:1,background:C.yellowBg,borderRadius:8,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{color:C.yellow,fontWeight:800,fontSize:18}}>{pendientes}</div>
+                    <div style={{color:C.yellow,fontSize:10,opacity:0.7}}>Pendientes</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Tabla de tareas del mes */}
+          <div style={{color:C.navy,fontWeight:800,fontSize:15,marginBottom:10}}>✓ Tareas del mes ({tareasFiltradas.length})</div>
+          <Card style={{padding:0,overflow:"hidden",marginBottom:28}}>
+            {tareasFiltradas.length===0 ? (
+              <div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Sin tareas en este período</div>
+            ) : (
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:C.panel}}>
+                    {["Título","Responsable","Cliente","Estatus","Fecha límite","Proceso"].map(h=>(
+                      <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tareasFiltradas.map(t=>{
+                    const perfil = getPerfil(t.assigned_to);
+                    return (
+                      <tr key={t.id} style={{borderBottom:`1px solid ${C.border}`}}>
+                        <td style={{padding:"10px 14px",color:C.text,fontSize:13,fontWeight:600,maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</td>
+                        <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{perfil?.nombre||"—"}</td>
+                        <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{t.client||"—"}</td>
+                        <td style={{padding:"10px 14px"}}>
+                          <span style={{background:(STATUS_COLOR[t.status]||C.muted)+"22",color:STATUS_COLOR[t.status]||C.muted,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{STATUS_LABEL[t.status]||t.status}</span>
+                        </td>
+                        <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{t.due_date||"—"}</td>
+                        <td style={{padding:"10px 14px",color:C.muted,fontSize:11}}>{t.proceso ? <span style={{background:C.navyDim,color:C.navy,borderRadius:7,padding:"2px 8px",fontSize:10,fontWeight:600}}>{t.proceso}</span> : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Card>
+
+          {/* Tabla de órdenes de trabajo del mes */}
+          <div style={{color:C.navy,fontWeight:800,fontSize:15,marginBottom:10}}>🛠️ Órdenes de trabajo del mes ({ordenesFiltradas.length})</div>
+          <Card style={{padding:0,overflow:"hidden"}}>
+            {ordenesFiltradas.length===0 ? (
+              <div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Sin órdenes de trabajo en este período</div>
+            ) : (
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:C.panel}}>
+                    {["Folio","Cliente","Categoría","Subcategoría","Fecha"].map(h=>(
+                      <th key={h} style={{padding:"10px 14px",color:C.muted,fontSize:11,fontWeight:700,textAlign:"left",textTransform:"uppercase"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordenesFiltradas.map(o=>(
+                    <tr key={o.id} style={{borderBottom:`1px solid ${C.border}`}}>
+                      <td style={{padding:"10px 14px",color:C.navy,fontWeight:700,fontSize:13}}>{o.folio}</td>
+                      <td style={{padding:"10px 14px",color:C.text,fontSize:13}}>{o.cliente_nombre}</td>
+                      <td style={{padding:"10px 14px"}}><span style={{background:C.navyDim,color:C.navy,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{o.categoria}</span></td>
+                      <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{o.subcategoria||"—"}</td>
+                      <td style={{padding:"10px 14px",color:C.muted,fontSize:12}}>{new Date(o.created_at).toLocaleDateString("es-MX")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -4721,6 +5263,7 @@ export default function App() {
     if (!user) return;
     supabase.from("impuestos").select("*").then(({data})=>setTaxes(data||[]));
     supabase.from("tareas").select("*").then(({data})=>setTasks(data||[]));
+    ejecutarAutomatizacionMensual().catch(e=>console.error("Error en automatización:", e));
   },[user]);
 
   // Navigate from Clientes to a module with pre-applied filters
@@ -4758,6 +5301,8 @@ export default function App() {
     clientes: <ClientesModule onNavigate={handleNavigate} user={user} />,
     nomina: <CalculosModule />,
     ordenes: <OrdenesTrabajoModule user={user} />,
+    cedulas: <CedulaImpuestosModule user={user} />,
+    reporte: <ReporteMensualModule />,
     cotizaciones: <CotizacionesModule user={user} />,
     asistente: <AsistenteModule user={user} />,
     fynco_dashboard: <FyncoDashboard />,
