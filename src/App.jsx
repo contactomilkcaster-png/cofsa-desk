@@ -4401,8 +4401,12 @@ const ESTATUS_SEGUIMIENTO = {
 
 function SeguimientoModule() {
   const [tableroActivo, setTableroActivo] = useState("constancias");
-  const [mes, setMes] = useState(new Date().getMonth()+1);
-  const [anio, setAnio] = useState(new Date().getFullYear());
+  // Contablemente, en el mes actual se trabaja sobre el mes anterior — ese es el default
+  const hoyInicial = new Date();
+  const mesContableInicial = hoyInicial.getMonth() === 0 ? 12 : hoyInicial.getMonth();
+  const anioContableInicial = hoyInicial.getMonth() === 0 ? hoyInicial.getFullYear()-1 : hoyInicial.getFullYear();
+  const [mes, setMes] = useState(mesContableInicial);
+  const [anio, setAnio] = useState(anioContableInicial);
   const [clientesReales, setClientesReales] = useState([]);
   const [celdas, setCeldas] = useState({}); // key: cliente|concepto -> {estatus, nota, id}
   const [loading, setLoading] = useState(true);
@@ -4518,11 +4522,14 @@ function SeguimientoModule() {
       </div>
 
       {/* Navegación de mes + resumen */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, flexWrap:"wrap", gap:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <button onClick={()=>cambiarMes(-1)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:9, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14 }}>←</button>
           <div style={{ color:C.navy, fontWeight:800, fontSize:16, minWidth:160, textAlign:"center" }}>{MESES[mes-1]} {anio}</div>
           <button onClick={()=>cambiarMes(1)} style={{ background:C.navyDim, border:"none", color:C.navy, borderRadius:9, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14 }}>→</button>
+          {mes===mesContableInicial && anio===anioContableInicial && (
+            <span style={{ background:C.navyDim, color:C.navy, borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700 }}>📌 Mes en curso de trabajo</span>
+          )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:140, height:10, background:C.border, borderRadius:6, overflow:"hidden" }}>
@@ -4530,6 +4537,9 @@ function SeguimientoModule() {
           </div>
           <span style={{ color:C.navy, fontWeight:700, fontSize:13 }}>{pctCumplimiento}% cumplido</span>
         </div>
+      </div>
+      <div style={{ color:C.muted, fontSize:12, marginBottom:18 }}>
+        Estamos en {MESES[hoyInicial.getMonth()]} {hoyInicial.getFullYear()} — contablemente se trabaja la información de <strong style={{color:C.navy}}>{MESES[mesContableInicial-1]} {anioContableInicial}</strong>.
       </div>
 
       {loading ? <Spinner/> : listaClientes.length === 0 ? (
